@@ -24,12 +24,14 @@ type EditBusinessClientProps = {
     tone: string;
     category: string;
     city: string;
-    state: string;
-    postalCode: string;
+    county: string;
     save: string;
-    region?: string;
     pasteTitle: string;
     selectPlatforms: string;
+    websiteUrl?: string;
+    websiteUrlPlaceholder?: string;
+    materialsUpload?: string;
+    materialsUploadHint?: string;
   };
 };
 
@@ -51,10 +53,12 @@ export function EditBusinessClient({
           tone: labels.tone,
           category: labels.category,
           city: labels.city,
-          state: labels.state,
-          postalCode: labels.postalCode,
+          county: labels.county,
           save: labels.save,
-          region: labels.region,
+          websiteUrl: labels.websiteUrl,
+          websiteUrlPlaceholder: labels.websiteUrlPlaceholder,
+          materialsUpload: labels.materialsUpload,
+          materialsUploadHint: labels.materialsUploadHint,
         }}
         locale={locale}
         initial={initial}

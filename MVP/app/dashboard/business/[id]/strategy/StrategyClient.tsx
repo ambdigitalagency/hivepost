@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { PLATFORM_LABELS } from "@/lib/platforms";
-import { getLocationTipsText } from "@/lib/location-tips";
+import { PLATFORM_LABELS, PLATFORM_DESCRIPTIONS } from "@/lib/platforms";
+
+const MAX_PLATFORMS = 2;
 
 type StrategyData = {
   id: string;
@@ -17,22 +18,30 @@ type StrategyClientProps = {
   locale: string;
   labels: {
     title: string;
-    noEditHint: string;
-    confirmAndContinue: string;
     generate: string;
     generating: string;
     recommendedPlatforms: string;
-    locationTipsTitle: string;
-    locationTips: string;
+    selectPlatforms: string;
+    selectedCount: string;
+    continueToCalendar: string;
   };
 };
+
+function interpolate(s: string, params: Record<string, string | number>): string {
+  let out = s;
+  for (const [k, v] of Object.entries(params)) {
+    out = out.replace(new RegExp(`\\{\\{${k}\\}\\}`, "g"), String(v));
+  }
+  return out;
+}
 
 export function StrategyClient({ businessId, locale, labels }: StrategyClientProps) {
   const router = useRouter();
   const [strategy, setStrategy] = useState<StrategyData | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [confirming, setConfirming] = useState(false);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isZh = locale === "zh";
@@ -65,29 +74,47 @@ export function StrategyClient({ businessId, locale, labels }: StrategyClientPro
     }
   }
 
-  async function handleConfirm() {
-    setConfirming(true);
+  function togglePlatform(key: string) {
+    setSelected((prev) => {
+      if (prev.includes(key)) return prev.filter((p) => p !== key);
+      if (prev.length >= MAX_PLATFORMS) return prev;
+      return [...prev, key];
+    });
+  }
+
+  async function handleContinueToCalendar(e: React.FormEvent) {
+    e.preventDefault();
+    if (selected.length === 0) return;
+    setSaving(true);
     setError(null);
     try {
-      const res = await fetch(`/api/business/${businessId}/strategy/confirm`, { method: "POST" });
+      await fetch(`/api/business/${businessId}/strategy/confirm`, { method: "POST" });
+      const res = await fetch(`/api/business/${businessId}/platforms`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ platforms: selected }),
+      });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error ?? "Failed");
+        setError(data.error ?? "Request failed");
+        setSaving(false);
         return;
       }
-      router.push(`/dashboard/business/${businessId}/platforms`);
+      const calRes = await fetch(`/api/business/${businessId}/calendar/generate`, { method: "POST" });
+      await calRes.json().catch(() => ({}));
+      router.push(`/dashboard/business/${businessId}/calendar`);
       router.refresh();
     } catch {
-      setError("Request failed");
+      setError("Network error");
     } finally {
-      setConfirming(false);
+      setSaving(false);
     }
   }
 
   if (loading) {
     return <p className="mt-6 text-neutral-500">{labels.generating}</p>;
   }
-  if (error) {
+  if (error && !strategy) {
     return <p className="mt-6 text-red-600 dark:text-red-400">{error}</p>;
   }
 
@@ -106,10 +133,11 @@ export function StrategyClient({ businessId, locale, labels }: StrategyClientPro
     );
   }
 
-  const platformLabels = strategy.recommendedPlatforms
+  const platformOptions = strategy.recommendedPlatforms
     .map((key) => ({
       key,
       label: isZh ? PLATFORM_LABELS[key]?.zh : PLATFORM_LABELS[key]?.en,
+      description: isZh ? PLATFORM_DESCRIPTIONS[key]?.zh : PLATFORM_DESCRIPTIONS[key]?.en,
     }))
     .filter((p) => p.label);
 
@@ -118,47 +146,51 @@ export function StrategyClient({ businessId, locale, labels }: StrategyClientPro
       <div className="rounded-lg border border-card-border bg-page-bg p-4">
         <p className="whitespace-pre-wrap text-sm text-foreground">{strategy.strategyText}</p>
       </div>
-      <div>
-        <h2 className="text-sm font-medium text-foreground">{labels.recommendedPlatforms}</h2>
-        <ul className="mt-2 flex flex-wrap gap-2">
-          {platformLabels.map(({ key, label }) => (
-            <li
-              key={key}
-              className="rounded-full bg-neutral-100 px-3 py-1 text-sm dark:bg-neutral-800"
+      <form onSubmit={handleContinueToCalendar}>
+        <h2 className="text-sm font-medium text-foreground">{labels.selectPlatforms}</h2>
+        <p className="mt-1 text-xs text-neutral-500">{labels.recommendedPlatforms}</p>
+        <div className="mt-3 grid gap-4 sm:grid-cols-2">
+          {platformOptions.map((opt) => (
+            <label
+              key={opt.key}
+              className={`flex cursor-pointer gap-4 rounded-xl border border-card-border bg-card-bg p-4 shadow-card transition hover:bg-page-bg ${
+                selected.includes(opt.key) ? "ring-2 ring-neutral-400 dark:ring-neutral-500" : ""
+              } ${!selected.includes(opt.key) && selected.length >= MAX_PLATFORMS ? "opacity-60" : ""}`}
             >
-              {label ?? key}
-            </li>
+              <input
+                type="checkbox"
+                checked={selected.includes(opt.key)}
+                onChange={() => togglePlatform(opt.key)}
+                disabled={!selected.includes(opt.key) && selected.length >= MAX_PLATFORMS}
+                className="mt-1 h-4 w-4 rounded border-neutral-300"
+              />
+              <div>
+                <span className="font-medium text-foreground">{opt.label}</span>
+                {opt.description && (
+                  <p className="mt-0.5 text-sm text-neutral-500">{opt.description}</p>
+                )}
+              </div>
+            </label>
           ))}
-        </ul>
-      </div>
-      {(() => {
-        const locationTipsText = getLocationTipsText(
-          strategy.recommendedPlatforms,
-          isZh ? "zh" : "en"
-        );
-        if (!locationTipsText) return null;
-        return (
-          <div className="rounded-lg border border-info-border bg-info-bg p-4">
-            <h2 className="text-sm font-medium text-blue-800 dark:text-blue-200">
-              {labels.locationTipsTitle}
-            </h2>
-            <p className="mt-1 whitespace-pre-wrap text-sm text-blue-700 dark:text-blue-300">
-              {locationTipsText}
-            </p>
-          </div>
-        );
-      })()}
-      <div className="rounded-lg border border-warning-border bg-warning-bg p-3">
-        <p className="text-sm text-amber-800 dark:text-amber-200">{labels.noEditHint}</p>
-      </div>
-      <button
-        type="button"
-        onClick={handleConfirm}
-        disabled={confirming}
-        className="w-full rounded-xl bg-primary-btn px-6 py-3 text-base font-medium text-white transition hover:bg-primary-btn-hover disabled:opacity-50 dark:text-neutral-900 dark:hover:bg-primary-btn-hover"
-      >
-        {confirming ? "..." : labels.confirmAndContinue}
-      </button>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
+          <span className="text-sm text-neutral-500">
+            {interpolate(labels.selectedCount, { n: selected.length })}
+          </span>
+          <button
+            type="submit"
+            disabled={saving || selected.length === 0}
+            className="rounded-xl bg-primary-btn px-6 py-2.5 text-sm font-medium text-white transition hover:bg-primary-btn-hover disabled:opacity-50 dark:text-neutral-900 dark:hover:bg-primary-btn-hover"
+          >
+            {saving ? "..." : labels.continueToCalendar}
+          </button>
+        </div>
+        {error && (
+          <p className="mt-3 text-sm text-red-600 dark:text-red-400" role="alert">
+            {error}
+          </p>
+        )}
+      </form>
     </div>
   );
 }

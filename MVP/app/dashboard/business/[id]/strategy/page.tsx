@@ -63,13 +63,12 @@ export default async function StrategyPage({
           locale={locale}
           labels={{
             title: t("strategy.title"),
-            noEditHint: t("strategy.noEditHint"),
-            confirmAndContinue: t("strategy.confirmAndContinue"),
             generate: t("strategy.generate"),
             generating: t("strategy.generating"),
-            recommendedPlatforms: t("strategy.recommendedPlatforms"),
-            locationTipsTitle: t("strategy.locationTipsTitle"),
-            locationTips: t("strategy.locationTips"),
+            recommendedPlatforms: t("strategy.recommendedPlatformsHint"),
+            selectPlatforms: t("strategy.selectPlatforms"),
+            selectedCount: t("business.selectedCount"),
+            continueToCalendar: t("business.continueToCalendar"),
           }}
         />
       </div>

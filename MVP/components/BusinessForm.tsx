@@ -1,7 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { CATEGORY_SUGGESTIONS_EN, CATEGORY_SUGGESTIONS_ZH } from "@/lib/categories";
+import {
+  CATEGORY_SUGGESTIONS_EN,
+  CATEGORY_SUGGESTIONS_ZH,
+  formatCategoryDisplay,
+  TONE_OPTIONS,
+} from "@/lib/categories";
 
 export type BusinessFormLabels = {
   name: string;
@@ -9,11 +14,9 @@ export type BusinessFormLabels = {
   tone: string;
   category: string;
   city: string;
-  state: string;
-  postalCode: string;
+  county: string;
   save: string;
-  region?: string;
-  nextChoosePlatforms?: string;
+  nextDescribeScenario?: string;
   websiteUrl?: string;
   websiteUrlPlaceholder?: string;
   materialsUpload?: string;
@@ -40,32 +43,37 @@ type BusinessFormProps = {
 
 export function BusinessForm({ labels, locale, initial, businessId, onSuccess }: BusinessFormProps) {
   const [name, setName] = useState(initial?.name ?? "");
-  const [region] = useState(initial?.region ?? "US");
   const [language, setLanguage] = useState(initial?.language ?? (locale === "zh" ? "zh" : "en"));
   const [tone, setTone] = useState(initial?.tone ?? "");
   const [category, setCategory] = useState(initial?.category ?? "");
   const [city, setCity] = useState(initial?.city ?? "");
-  const [state, setState] = useState(initial?.state ?? "");
-  const [postalCode, setPostalCode] = useState(initial?.postal_code ?? "");
+  const [county, setCounty] = useState(initial?.state ?? "");
   const [websiteUrl, setWebsiteUrl] = useState(initial?.website_url ?? "");
   const [materialFiles, setMaterialFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const categoryOptions = locale === "zh" ? CATEGORY_SUGGESTIONS_ZH : CATEGORY_SUGGESTIONS_EN;
+  const isZh = locale === "zh";
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!name.trim()) {
+      setError(isZh ? "请填写商家名称" : "Business name is required");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       const body = {
-        name: name || null,
-        region,
+        name: name.trim(),
+        region: "US",
         language,
         tone: tone || null,
         category: category || null,
         city: city || null,
-        state: state || null,
-        postal_code: postalCode || null,
+        state: county.trim() || null,
+        postal_code: null,
         website_url: websiteUrl.trim() || null,
       };
       const url = businessId ? `/api/business/${businessId}` : "/api/business";
@@ -103,24 +111,17 @@ export function BusinessForm({ labels, locale, initial, businessId, onSuccess }:
     <form onSubmit={handleSubmit} className="mt-8 space-y-5">
       <div>
         <label className="block text-sm font-medium text-foreground">{labels.category}</label>
-        <input
-          type="text"
-          list="category-suggestions"
+        <select
           value={category}
           onChange={(e) => setCategory(e.target.value)}
-          placeholder={locale === "zh" ? "如：餐饮、美甲、美发" : "e.g. plumbing, nail_salon, barber"}
           className={inputClass}
-        />
-        <datalist id="category-suggestions">
-          {(locale === "zh" ? CATEGORY_SUGGESTIONS_ZH : CATEGORY_SUGGESTIONS_EN).map((c) => (
-            <option key={c} value={c} />
+        >
+          <option value="">{isZh ? "请选择" : "Select…"}</option>
+          {categoryOptions.map((c) => (
+            <option key={c} value={c}>
+              {c.includes("_") || /^[a-z]/.test(c) ? formatCategoryDisplay(c) : c}
+            </option>
           ))}
-        </datalist>
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-foreground">{labels.region ?? "Region"}</label>
-        <select value={region} className={inputClass} disabled>
-          <option value="US">US</option>
         </select>
       </div>
       <div>
@@ -136,14 +137,18 @@ export function BusinessForm({ labels, locale, initial, businessId, onSuccess }:
       </div>
       <div>
         <label className="block text-sm font-medium text-foreground">{labels.tone}</label>
-        <input
-          type="text"
+        <select
           value={tone}
           onChange={(e) => setTone(e.target.value)}
-          placeholder="e.g. friendly, professional"
           className={inputClass}
-        />
-        <p className="mt-1 text-xs text-neutral-500">How formal or casual should your posts sound?</p>
+        >
+          <option value="">{isZh ? "请选择" : "Select…"}</option>
+          {TONE_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {isZh ? opt.zh : opt.en}
+            </option>
+          ))}
+        </select>
       </div>
       <div>
         <label className="block text-sm font-medium text-foreground">{labels.name}</label>
@@ -151,8 +156,9 @@ export function BusinessForm({ labels, locale, initial, businessId, onSuccess }:
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Business name (optional)"
+          placeholder={labels.name}
           className={inputClass}
+          required
         />
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
@@ -167,25 +173,15 @@ export function BusinessForm({ labels, locale, initial, businessId, onSuccess }:
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-foreground">{labels.state}</label>
+          <label className="block text-sm font-medium text-foreground">{labels.county}</label>
           <input
             type="text"
-            value={state}
-            onChange={(e) => setState(e.target.value)}
-            placeholder="e.g. CA"
+            value={county}
+            onChange={(e) => setCounty(e.target.value)}
+            placeholder={isZh ? "如：洛杉矶县" : "e.g. Los Angeles County"}
             className={inputClass}
           />
         </div>
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-foreground">{labels.postalCode}</label>
-        <input
-          type="text"
-          value={postalCode}
-          onChange={(e) => setPostalCode(e.target.value)}
-          placeholder="Optional"
-          className={inputClass}
-        />
       </div>
       <div>
         <label className="block text-sm font-medium text-foreground">{labels.websiteUrl ?? "Website URL (optional)"}</label>
@@ -217,7 +213,7 @@ export function BusinessForm({ labels, locale, initial, businessId, onSuccess }:
           disabled={loading}
           className="w-full rounded-xl bg-primary-btn px-6 py-3 text-base font-medium text-white shadow-card transition hover:bg-primary-btn-hover disabled:opacity-50 dark:text-neutral-900 dark:hover:bg-primary-btn-hover"
         >
-          {loading ? "..." : labels.nextChoosePlatforms ?? labels.save}
+          {loading ? "..." : labels.nextDescribeScenario ?? labels.save}
         </button>
       </div>
     </form>

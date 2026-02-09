@@ -12,11 +12,9 @@ type CreateBusinessClientProps = {
     tone: string;
     category: string;
     city: string;
-    state: string;
-    postalCode: string;
+    county: string;
     save: string;
-    region?: string;
-    nextChoosePlatforms?: string;
+    nextDescribeScenario?: string;
     backToDashboard: string;
     websiteUrl?: string;
     websiteUrlPlaceholder?: string;
@@ -31,21 +29,19 @@ export function CreateBusinessClient({ locale, labels }: CreateBusinessClientPro
   return (
     <BusinessForm
       labels={{
-            name: labels.name,
-            language: labels.language,
-            tone: labels.tone,
-            category: labels.category,
-            city: labels.city,
-            state: labels.state,
-            postalCode: labels.postalCode,
-            save: labels.save,
-            region: labels.region,
-            nextChoosePlatforms: labels.nextChoosePlatforms,
-            websiteUrl: labels.websiteUrl,
-            websiteUrlPlaceholder: labels.websiteUrlPlaceholder,
-            materialsUpload: labels.materialsUpload,
-            materialsUploadHint: labels.materialsUploadHint,
-          }}
+        name: labels.name,
+        language: labels.language,
+        tone: labels.tone,
+        category: labels.category,
+        city: labels.city,
+        county: labels.county,
+        save: labels.save,
+        nextDescribeScenario: labels.nextDescribeScenario,
+        websiteUrl: labels.websiteUrl,
+        websiteUrlPlaceholder: labels.websiteUrlPlaceholder,
+        materialsUpload: labels.materialsUpload,
+        materialsUploadHint: labels.materialsUploadHint,
+      }}
       locale={locale}
       onSuccess={(id) => router.push(`/dashboard/business/${id}/paste`)}
     />

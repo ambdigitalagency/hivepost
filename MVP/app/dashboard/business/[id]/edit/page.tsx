@@ -62,12 +62,14 @@ export default async function EditBusinessPage({
           tone: t("business.tone"),
           category: t("business.category"),
           city: t("business.city"),
-          state: t("business.state"),
-          postalCode: t("business.postalCode"),
+          county: t("business.county"),
           save: t("business.save"),
-          region: t("business.region"),
           pasteTitle: t("ingest.pasteTitle"),
           selectPlatforms: t("business.selectPlatforms"),
+          websiteUrl: t("business.websiteUrl"),
+          websiteUrlPlaceholder: t("business.websiteUrlPlaceholder"),
+          materialsUpload: t("business.materialsUpload"),
+          materialsUploadHint: t("business.materialsUploadHint"),
         }}
       />
       </div>
