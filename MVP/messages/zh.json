@@ -43,7 +43,9 @@
     "create": "创建业务",
     "tellUs": "告诉我们你的业务",
     "tellUsHint": "便于我们生成符合您行业和受众的内容。",
-    "nextDescribeScenario": "下一步：描述业务场景",
+    "nextStepGenerateStrategy": "下一步，生成策略",
+    "scenarioLabel": "应用场景",
+    "scenarioPlaceholder": "如：客户对话、业务说明、常见问题（选填）",
     "edit": "编辑业务",
     "name": "商家名称",
     "language": "语言",
@@ -84,6 +86,8 @@
     "recommendedPlatformsHint": "根据你的业务推荐。最多选 2 个。",
     "generate": "生成策略",
     "generating": "生成中…",
+    "generatingStrategy": "正在生成策略…",
+    "contentGenerate": "内容生成",
     "recommendedPlatforms": "推荐平台"
   },
   "calendar": {

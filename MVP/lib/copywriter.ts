@@ -44,8 +44,8 @@ function getHashtagInstruction(platform: string, lang: "en" | "zh"): string {
   }
   if (p === "wechat_moments") {
     return lang === "zh"
-      ? "微信朋友圈可不加或加 1–2 个简短话题标签。"
-      : "WeChat Moments: hashtags optional; add 0–2 short ones if relevant.";
+      ? "微信朋友圈：不要使用话题标签（hashtag）。"
+      : "WeChat Moments: do not use any hashtags.";
   }
   if (["instagram", "facebook", "nextdoor", "google_business_profile"].includes(p)) {
     return lang === "zh"

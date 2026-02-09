@@ -17,6 +17,9 @@ export type BusinessFormLabels = {
   county: string;
   save: string;
   nextDescribeScenario?: string;
+  nextStepGenerateStrategy?: string;
+  scenarioLabel?: string;
+  scenarioPlaceholder?: string;
   websiteUrl?: string;
   websiteUrlPlaceholder?: string;
   materialsUpload?: string;
@@ -39,9 +42,11 @@ type BusinessFormProps = {
   };
   businessId?: string;
   onSuccess: (id: string) => void;
+  /** When true, show 应用场景 textarea below form and submit button becomes 下一步，生成策略; on submit will also POST ingest if scenario has content */
+  showScenarioSection?: boolean;
 };
 
-export function BusinessForm({ labels, locale, initial, businessId, onSuccess }: BusinessFormProps) {
+export function BusinessForm({ labels, locale, initial, businessId, onSuccess, showScenarioSection }: BusinessFormProps) {
   const [name, setName] = useState(initial?.name ?? "");
   const [language, setLanguage] = useState(initial?.language ?? (locale === "zh" ? "zh" : "en"));
   const [tone, setTone] = useState(initial?.tone ?? "");
@@ -49,6 +54,7 @@ export function BusinessForm({ labels, locale, initial, businessId, onSuccess }:
   const [city, setCity] = useState(initial?.city ?? "");
   const [county, setCounty] = useState(initial?.state ?? "");
   const [websiteUrl, setWebsiteUrl] = useState(initial?.website_url ?? "");
+  const [scenario, setScenario] = useState("");
   const [materialFiles, setMaterialFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -94,6 +100,20 @@ export function BusinessForm({ labels, locale, initial, businessId, onSuccess }:
           const fd = new FormData();
           fd.append("file", file);
           await fetch(`/api/business/${id}/materials`, { method: "POST", body: fd });
+        }
+      }
+      if (showScenarioSection && scenario.trim()) {
+        const ingestRes = await fetch("/api/ingest", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ businessId: id, text: scenario.trim() }),
+        });
+        if (!ingestRes.ok) {
+          const ingestData = await ingestRes.json().catch(() => ({}));
+          if (ingestData.code !== "GATEKEEPER_BLOCKED") {
+            setError(ingestData.message ?? ingestData.error ?? "Request failed");
+            return;
+          }
         }
       }
       onSuccess(id);
@@ -206,6 +226,21 @@ export function BusinessForm({ labels, locale, initial, businessId, onSuccess }:
           <p className="mt-1 text-xs text-neutral-500">{labels.materialsUploadHint ?? "Flyers, brochures, or designs. PDF, JPEG, PNG, WebP. Max 10MB each."}</p>
         </div>
       )}
+      {showScenarioSection && (
+        <div>
+          <label className="block text-sm font-medium text-foreground">{labels.scenarioLabel ?? "Application scenario"}</label>
+          <textarea
+            value={scenario}
+            onChange={(e) => setScenario(e.target.value)}
+            placeholder={labels.scenarioPlaceholder}
+            rows={6}
+            className={inputClass}
+          />
+          <p className="mt-1 text-xs text-neutral-500">
+            {isZh ? "选填。客户对话、业务说明、常见问题等，有助于生成更贴合的营销策略。" : "Optional. Customer conversations, business notes, FAQs—helps generate a better strategy."}
+          </p>
+        </div>
+      )}
       {error && <p className="text-sm text-red-600 dark:text-red-400" role="alert">{error}</p>}
       <div className="flex justify-center pt-4">
         <button
@@ -213,7 +248,7 @@ export function BusinessForm({ labels, locale, initial, businessId, onSuccess }:
           disabled={loading}
           className="w-full rounded-xl bg-primary-btn px-6 py-3 text-base font-medium text-white shadow-card transition hover:bg-primary-btn-hover disabled:opacity-50 dark:text-neutral-900 dark:hover:bg-primary-btn-hover"
         >
-          {loading ? "..." : labels.nextDescribeScenario ?? labels.save}
+          {loading ? "..." : (showScenarioSection ? (labels.nextStepGenerateStrategy ?? labels.save) : (labels.nextDescribeScenario ?? labels.save))}
         </button>
       </div>
     </form>

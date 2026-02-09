@@ -14,7 +14,9 @@ type CreateBusinessClientProps = {
     city: string;
     county: string;
     save: string;
-    nextDescribeScenario?: string;
+    nextStepGenerateStrategy: string;
+    scenarioLabel: string;
+    scenarioPlaceholder: string;
     backToDashboard: string;
     websiteUrl?: string;
     websiteUrlPlaceholder?: string;
@@ -36,14 +38,17 @@ export function CreateBusinessClient({ locale, labels }: CreateBusinessClientPro
         city: labels.city,
         county: labels.county,
         save: labels.save,
-        nextDescribeScenario: labels.nextDescribeScenario,
+        nextStepGenerateStrategy: labels.nextStepGenerateStrategy,
+        scenarioLabel: labels.scenarioLabel,
+        scenarioPlaceholder: labels.scenarioPlaceholder,
         websiteUrl: labels.websiteUrl,
         websiteUrlPlaceholder: labels.websiteUrlPlaceholder,
         materialsUpload: labels.materialsUpload,
         materialsUploadHint: labels.materialsUploadHint,
       }}
       locale={locale}
-      onSuccess={(id) => router.push(`/dashboard/business/${id}/paste`)}
+      showScenarioSection
+      onSuccess={(id) => router.push(`/dashboard/business/${id}/strategy`)}
     />
   );
 }

@@ -51,7 +51,7 @@ export default async function StrategyPage({
   return (
     <div className="mx-auto max-w-2xl">
       <Link
-        href={`/dashboard/business/${id}/paste`}
+        href="/dashboard"
         className="inline-flex items-center gap-1 text-sm text-neutral-600 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-200"
       >
         ← {t("business.backToDashboard")}
@@ -65,10 +65,11 @@ export default async function StrategyPage({
             title: t("strategy.title"),
             generate: t("strategy.generate"),
             generating: t("strategy.generating"),
+            generatingStrategy: t("strategy.generatingStrategy"),
             recommendedPlatforms: t("strategy.recommendedPlatformsHint"),
             selectPlatforms: t("strategy.selectPlatforms"),
             selectedCount: t("business.selectedCount"),
-            continueToCalendar: t("business.continueToCalendar"),
+            contentGenerate: t("strategy.contentGenerate"),
           }}
         />
       </div>

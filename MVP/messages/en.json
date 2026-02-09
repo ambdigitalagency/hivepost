@@ -43,7 +43,9 @@
     "create": "Create business",
     "tellUs": "Tell us about your business",
     "tellUsHint": "This helps us generate content that fits your industry and audience.",
-    "nextDescribeScenario": "Next: Describe your business scenario",
+    "nextStepGenerateStrategy": "Next: Generate strategy",
+    "scenarioLabel": "Application scenario",
+    "scenarioPlaceholder": "e.g. customer conversations, service descriptions, FAQs (optional)",
     "edit": "Edit business",
     "name": "Business name",
     "language": "Language",
@@ -84,6 +86,8 @@
     "recommendedPlatformsHint": "Recommended for your business. Select up to 2.",
     "generate": "Generate strategy",
     "generating": "Generating…",
+    "generatingStrategy": "Generating strategy…",
+    "contentGenerate": "Content generation",
     "recommendedPlatforms": "Recommended platforms"
   },
   "calendar": {

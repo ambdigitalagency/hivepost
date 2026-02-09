@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 
@@ -72,6 +72,7 @@ export function PostDetailClient({
   const [finalizingSlots, setFinalizingSlots] = useState<(null | { url: string })[] | null>(null);
   const [finalizingOrder, setFinalizingOrder] = useState<string[]>([]);
   const candidatesAbortRef = useRef<AbortController | null>(null);
+  const hasAutoTriggeredCaption = useRef(false);
 
   const isPlanned = status === "planned";
   const isDraft = status === "draft";
@@ -83,6 +84,21 @@ export function PostDetailClient({
   const hasCandidates = candidateImages.length > 0;
   const hasFinals = finalImages.length > 0;
   const canSelectMore = selectedIds.size < maxFinalCount;
+
+  // From calendar "生成帖子": auto-generate caption once when opening a planned post with no caption
+  useEffect(() => {
+    if (
+      status !== "planned" ||
+      (captionText != null && captionText.trim().length > 0) ||
+      hasAutoTriggeredCaption.current
+    ) {
+      return;
+    }
+    hasAutoTriggeredCaption.current = true;
+    void handleGenerate();
+    // Intentionally run only on mount; captionText/status are the initial server values
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function toggleSelected(id: string) {
     setSelectedIds((prev) => {
