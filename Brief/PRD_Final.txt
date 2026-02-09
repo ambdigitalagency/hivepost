@@ -1,0 +1,275 @@
+## Product Requirements Document (PRD) ? Auto Content Generation Tool (MVP)
+
+**Product name (working):** HivePost (MVP)
+**Stage:** MVP (Free, SaaS-lite)
+**Markets:** US only (bilingual: English + ??)
+**Audience:** Local skilled service SMB owners and sole proprietors (low marketing knowledge; many without higher education)
+**Primary goal:** Validate real demand + prove users are willing to use and come back; capture investor-grade usage data
+**Core promise:** Maintain consistent social presence with minimal thinking/effort, while keeping the owner fully in control.
+**Principle:** Automates thinking, not decision-making.
+**Product principle (hardcoded):** Strategy and all in-product copy must be short, plain language, and understandable at a glance?no jargon, no long explanations. Target users should not need to study or research to understand.
+
+---
+
+# 1) Vision & Positioning
+
+## 1.1 Vision (internal)
+
+Help skilled service SMB owners post consistently without feeling stupid, without learning marketing, and without losing control.
+
+## 1.2 Positioning (external)
+
+"Generate ready-to-post captions and images from the conversations you already have?fast, safe, and on-brand."
+
+**Not** "more leads."
+**Yes:** "high-signal drafts + compliance-clean + reduces mental load."
+
+---
+
+# 2) Target User (MVP)
+
+## 2.1 Who they are
+
+* Plumber, electrician, HVAC, handyman, cleaning, etc.
+* Income depends on skill, not marketing
+* Low comfort with writing/branding
+* No budget for agencies or time for content planning
+* Gets customer inquiries sporadically; needs steady presence
+* Many have limited formal education?product and strategy language must be simple and short
+
+## 2.2 What they fear
+
+* Looking unprofessional / "cringe"
+* Posting the wrong thing (claims, tone, mistakes)
+* Losing control of business image
+* Spending time and still getting no results
+
+---
+
+# 3) Problem Statement
+
+**User problem:**
+"I know I should post, but I don't know what to say. It takes too long, I'm not confident, and I'm afraid I'll post something wrong."
+
+**Business problem (for MVP):**
+Can we prove SMB owners will repeatedly use a tool that turns their real conversations into usable content, and do they value the output enough to continue?
+
+---
+
+# 4) MVP Scope (Hard Constraints)
+
+## 4.1 Output types
+
+* Text + Images only
+* No video generation
+* No audio/music generation
+
+## 4.2 Platform limits (hard-enforced)
+
+* Each user can have **max 2 social platforms** active in the product.
+* User must **choose 2 from the strategy-recommended list** (recommendation list has more than 2 options).
+
+**Supported platforms (MVP):**
+
+* English / US: Instagram, Facebook, Nextdoor, Google Business Profile
+* Chinese (available in US for bilingual users): ??? (Xiaohongshu), ????? (WeChat Moments)
+* **Out of scope for MVP:** ????? (WeChat Official Account)
+
+**Strategy recommendation rule:** For Chinese-language or Chinese-preferring users, ??? and ????? must be **default-included in the recommended platform list** (hardcoded in strategy logic). User still selects only 2 from the full recommended set.
+
+## 4.3 Posting limits (hard-enforced)
+
+* **Max 2 posts per platform per week**
+* With 2 platforms: **max 4 posts/week/user**
+* For planning: **~16 posts/user/month** (assume 4 weeks)
+
+## 4.4 Image limits per post (hard-enforced)
+
+* Final deliverable: **max 9 images per post**
+* Users must **choose**; system does not auto-select.
+
+## 4.5 Regeneration policy (hard-enforced)
+
+We do **not** allow unlimited "regenerate images" per post.
+
+Instead we use a controlled workflow:
+
+### "One-shot candidates" model (cost-control)
+
+* Per post, system generates a **candidate gallery** in **one user action**:
+  * Default: **20 low-quality images** (configurable: 10/20/30; subject to budget ladder)
+  * User selects up to **9 winners**
+* "Regenerate" is **disabled by default**
+* Optional fallback: **1 "New batch" per post max** (only if budget allows)
+
+### Two-stage quality strategy (cost + quality)
+
+1. **Explore (LOW quality):** generate many cheap candidates
+2. **Finalize (HIGH quality):** re-render only selected images at high quality
+
+Goal: **lower cost** while delivering **high final quality**.
+
+---
+
+# 5) User Journeys & Flows (Updated)
+
+## 5.1 Primary Journey (first-time user)
+
+1. Landing ? Start
+2. **Sign in with Google** (only auth method in MVP)
+3. Create Business (minimal info: category, region US, language EN/ZH, tone)
+4. Paste chat/messages or notes (optional at this step) ? **Gatekeeper** validates input
+5. **Marketing Strategy** generated (SWOT-style, short & plain language; recommends **more than 2** platforms; for Chinese users ??? + ????? default in recommendation). **MVP: No strategy editing**?clearly tell user "This version does not support changing the strategy; please confirm to continue."
+6. **User selects 2 platforms** from the recommended list
+7. **Content calendar** generated: **one month** of content schedule (dates + platform + content type per slot). Stored as planned posts (no separate calendar table). **No content is auto-generated**?slots remain planned until the user logs in and requests generation.
+8. User **returns** and picks a calendar slot ? Generate post draft (caption) within quota (user-initiated only)
+9. Review caption + **Generate images** (candidate gallery, low quality)
+10. Select up to 9 images ? **Finalize selected** (high quality)
+11. **Export** (copy text + download images)
+12. **First-use message:** Inform user that we will ask for feedback **about 2 weeks after first use**, so they can share how it's working and what to improve. Do **not** show full feedback form yet.
+13. **~2 weeks after first use:** Prompt for **feedback** (5-point rating + "What's good?" + "What to improve?").
+
+## 5.2 Returning Journey
+
+* User **must log in** to request content generation. Nothing is generated in the background or automatically.
+* Shows: Quota meter; Content calendar / last drafts; "Generate this week's posts" shortcut (within remaining quota).
+* User clicks a planned slot to generate caption + images for that slot only (user-initiated).
+* If 2 weeks have passed since first use and feedback not yet given: show feedback prompt (rating + open text).
+
+---
+
+# 6) Gatekeeper (Abuse Prevention)
+
+## 6.1 Purpose
+
+Restrict use to the product's intended scope. Block requests that are clearly unrelated (e.g. homework, code, legal docs, generic creative writing unrelated to the user's business/marketing).
+
+## 6.2 Behavior
+
+* **Semantic check** on user input before strategy generation, content generation, and image generation.
+* Evaluate whether the request fits: business/marketing content, brand, services, local SMB context.
+* **Prefer false blocks over abuse:** if in doubt, block.
+* **On block:** Show only: **"Please modify your input and try again."** No appeal, no detailed explanation of why.
+
+## 6.3 Implementation note
+
+Single Gatekeeper module (e.g. lightweight intent + scope check via API) at the entry point for strategy and content flows.
+
+---
+
+# 7) Marketing Strategy & Content Calendar
+
+## 7.1 Marketing Strategy
+
+* **When:** After business setup and (optional) paste; before platform selection and calendar.
+* **Input:** Business info, region (US), language, pasted content (if any).
+* **Output (short, plain language?product principle):**
+  * Simple SWOT-style view (strengths, weaknesses, opportunities, threats) in 2?3 sentences per dimension; no jargon.
+  * Content direction suggestions (what to post about).
+  * **Recommended platforms for content** (list must have **more than 2** options so user can choose 2).
+  * For Chinese users: **??? and ????? must appear in the recommended list by default** (hardcoded).
+* **No strategy editing in MVP.** Product copy must state this clearly.
+
+## 7.2 Platform selection
+
+* User selects **exactly 2 platforms** from the strategy-recommended list.
+* Selection is required before content calendar is generated.
+
+## 7.3 Content calendar
+
+* **When:** After user confirms strategy and selects 2 platforms.
+* **What:** One **month** of content schedule (which dates, which platform, which content type e.g. tip/faq/story/offer).
+* **Storage:** Use **posts** table with `scheduled_date` and `status = planned` (no separate content_calendar table). Each calendar slot = one row; when user "generates" that slot, it becomes draft and goes through caption + images flow.
+* **UX:** User sees calendar, then chooses a slot to "generate" (caption + images) within quota.
+* **No auto-generation (retention design):** The calendar is **planned only**. No captions or images are generated automatically. Users must **log in and explicitly request** generation for each slot they want. This ensures users return to the platform and drive repeat usage; nothing runs in the background.
+
+---
+
+# 8) Product Requirements (Pages / Screens)
+
+1. **Landing** ? Value prop, "You approve everything", privacy disclaimer, bilingual (EN / ??)
+2. **Sign in** ? Google only
+3. **Business Setup** ? Category, region US, language EN/??, tone
+4. **Paste / Input** ? Textarea; Gatekeeper on submit; "Don't paste sensitive personal data."
+5. **Strategy** ? Short plain-language strategy; recommended platforms (>2); ???+????? for Chinese users; "This version does not support changing the strategy; please confirm to continue."
+6. **Platform Selection** ? Select exactly 2 from recommended list ? generate one-month calendar
+7. **Content Calendar** ? One-month view; user clicks slot to generate that post (user-initiated)
+8. **Generation Results (per post)** ? Draft caption, edit, generate images, select ?9, finalize, optional New batch
+9. **Export** ? Copy captions, download images, Mark as used
+10. **Usage & Limits** ? Posts remaining per platform/week, reset time
+11. **Feedback** ? At first use: message only ("We'll ask for feedback in ~2 weeks"). ~2 weeks later: 5-point rating + "What's good?" + "What to improve?"
+
+# 9) AI System Requirements (Modules)
+
+## 9.1 Gatekeeper ? Input: user text + context. Output: allow/block. On block: "Please modify your input and try again."
+## 9.2 Extractor ? Input: pasted conversations/notes. Output (JSON): business type, pain points, tone, do-not-say, locale (US).
+## 9.3 Strategy Generator ? Input: business, region, language, optional extractor. Output: Short strategy + recommended platforms (>2); Chinese: include ??? + ?????.
+## 9.4 Copywriter ? Input: extractor+strategy+platform+tone. Output: captions.
+## 9.5 Risk Checker ? Input: captions. Output: pass/fail, risk tags, safe rewrite.
+## 9.6 Image Generator ? Candidate batch (low) + Finalize (high, ?9). Provider: cost-effective (e.g. Replicate/Fal); text: OpenAI.
+
+---
+
+# 10) Quotas, Budget, and Cost Controls
+
+## 10.1 Quota rules (hard)
+* platforms_per_user_max = 2; posts_per_platform_per_week_max = 2; final_images_per_post_max = 9; candidate_batches_per_post_max = 1 (optional 2 via "New batch"); finalize_per_post_max = 1.
+
+## 10.2 Global monthly API budget (MVP)
+* **$100/month** (real cap). Track spend, enforce cap, degrade gracefully.
+
+## 10.3 Budget degradation ladder
+1. Reduce candidate count 20?10; 2. Reduce finalize max 9?3; 3. Disable "New batch"; 4. Stricter weekly usage.
+
+## 10.4 Spend visibility ? Internal only; in-product show quota/remaining only (no $).
+
+---
+
+# 11) Data & Telemetry
+
+Events: landing_view, sign_in_google, onboarding_started/completed, strategy_generated/confirmed, platforms_selected, content_calendar_generated, ingest_submitted, generate_clicked, drafts_created, caption_edited, candidate_images_created, images_selected_count, finalize_clicked, export_clicked, first_use_completed, marked_used, quota_hit, risk_flagged, gatekeeper_blocked, feedback_invitation_shown, feedback_submitted.
+Metrics: Activation, Engagement, Retention, Validation (feedback rate, rating, themes), Unit economics.
+
+---
+
+# 12) Privacy, Safety, Compliance
+
+Google only login; no phone/name/address. PII scrub before storage/AI. Warning: "Don't paste sensitive personal data." Raw text auto-delete 7?14 days. Risk Checker for content safety.
+
+---
+
+# 13) Technical Requirements (Minimum, Lightweight)
+
+Frontend: Responsive, bilingual (EN/ZH). Backend: Single API, quota+budget. Auth: Google only (e.g. Supabase Auth / NextAuth). DB: Postgres. Storage: Object storage for images. Text: OpenAI. Image: Cost-effective (Replicate/Fal). Async jobs for images; retries; idempotency. Deploy: Simple (e.g. Vercel + Supabase).
+
+---
+
+# 14) Database Model (Minimum, Lightweight)
+
+users (id, email, name, first_used_at, created_at)
+businesses (id, user_id, name, region, language, tone, category, created_at)
+business_platforms (id, business_id, platform; UNIQUE(business_id, platform); max 2)
+strategies (id, business_id, recommended_platforms, strategy_text, created_at)
+ingests (id, business_id, redacted_text, created_at)
+posts (id, business_id, platform, week_start_date, scheduled_date, content_type, caption_text, risk_flags, status: planned|draft|images_pending|ready|exported, created_at, exported_at)
+image_batches, post_images, weekly_quota_usage, api_cost_ledger, events, feedback (id, user_id, business_id, rating 1?5, whats_good, what_to_improve, created_at)
+No separate content_calendar table; calendar = posts with status=planned.
+
+---
+
+# 15) Non-Goals (MVP)
+
+Auto-posting; ?????; strategy editing or comparison; video/audio; multi-user/teams; advanced brand kits; chat integrations; full CRM; Thailand; Gatekeeper appeal.
+
+---
+
+# 16) Risks & Mitigations
+
+Cost: quotas, $100 cap, ladder. Quality: extractor+strategy+user choice. Fear: risk checker, "you approve everything." Latency: async, progress. Abuse: Gatekeeper, prefer block.
+
+---
+
+# 17) Acceptance Criteria (MVP "ready")
+
+User: Google sign-in; create business; see strategy (short, >2 platforms; Chinese: ???+?????); select 2 platforms; get one-month calendar; **return and** generate from slots (user-initiated); ?2 posts/platform/week; candidate gallery; select ?9, finalize; export; quota display; first-use message (feedback in ~2 weeks); at ~2 weeks submit feedback (5-point + good + improve).
+System: Gatekeeper with "Please modify your input and try again."; log events; PII scrub; $100 budget + ladder; access control; short plain language everywhere; no auto-generation of content?user must request.

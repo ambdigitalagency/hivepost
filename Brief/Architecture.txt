@@ -1,0 +1,469 @@
+## MVP Architecture Requirements
+
+This architecture reflects all current MVP rules:
+
+* **Max 2 platforms/user**
+* **Max 2 posts/platform/week**
+* **Text + images only**
+* **No video/audio**
+* **No unlimited image regen**
+* **One-shot low-quality candidates (20/30) ? user selects up to 9 ? finalize high-quality**
+* Global API budget control (e.g., $1,000/mo) with graceful degradation
+
+---
+
+# 0) Architecture Goals
+
+1. **Cost predictability** (hard caps + budget guardrails)
+2. **Low complexity** (single backend + Postgres + object storage)
+3. **Privacy clean** (no phone/name; PII scrubbing)
+4. **Investor-grade telemetry** (events + cost per output)
+5. **Human in control** (drafts and selections; no auto-posting)
+6. **User-initiated generation only (retention design):** Content calendar is planned only. No captions or images are auto-generated. Users must log in and explicitly request generation for each slot. Nothing runs in the background; this ensures users return to the platform.
+
+---
+
+# 1) System Overview (Components)
+
+### 1. Web Client (Frontend)
+
+* Responsive web app (mobile-first)
+* Key screens:
+
+  * Landing
+  * Onboarding (Business + Region + Tone)
+  * Platform selection (enforce max 2)
+  * Paste input
+  * Drafts list + editor
+  * Image candidates grid (select up to 9)
+  * Finalize high-quality
+  * Export (copy text, download images)
+  * Usage / limits display
+
+### 2. Backend API (Orchestration)
+
+Single API service that:
+
+* enforces quotas and budget rules
+* orchestrates AI workflow (text + image pipeline)
+* persists drafts, images metadata, events
+* runs async jobs for image generation and finalization
+
+### 3. Database (Postgres)
+
+Stores all structured data: users/sessions, businesses, posts, quotas, image jobs, events, feedback, spend ledger.
+
+### 4. Object Storage (S3/R2/Supabase Storage)
+
+Stores image files (candidates + finals) and optional uploaded inputs.
+
+### 5. Queue + Worker (Required because images can be slow)
+
+* Queue: Upstash Redis / Cloud Tasks / Supabase queues (any simple option)
+* Worker: executes image generation and finalize jobs, writes results back to DB
+
+### 6. Analytics
+
+Either:
+
+* PostHog/Amplitude (preferred) + server-side events
+  or
+* a first-party `events` table + basic dashboards
+
+(You can do both: DB for truth + tool for dashboards.)
+
+---
+
+# 2) Identity Model (MVP-appropriate)
+
+### Option A: Anonymous sessions (recommended for lowest friction)
+
+* Create a `session_id` at first visit and store in cookie/localStorage.
+* Everything is tied to `session_id` unless user upgrades to login later.
+
+### Option B: Email magic link (optional)
+
+* Still no passwords.
+* Enables multi-device history.
+
+**Important:** limits and spend tracking must work for both `session_id` and `user_id`.
+
+---
+
+# 3) Core Services Inside the Backend
+
+## 3.1 Quota Service (Hard enforcement)
+
+Tracks and blocks:
+
+* **platforms_per_user_max = 2**
+* **posts_per_platform_per_week_max = 2**
+* **candidate_batches_per_post_max = 1** (optional: allow 1 extra ?New batch?)
+* **final_images_per_post_max = 9**
+* **finalize_per_post_max = 1** (per batch selection)
+
+Week bucket policy:
+
+* simplest: Monday 00:00 (user timezone) ? Sunday 23:59
+* store `week_start_date` and count usages per platform
+
+Quota must be enforced on:
+
+* create post generation
+* ?New batch? candidates
+* finalize (optional gate if needed)
+
+## 3.2 Budget Service (Hard enforcement + degradation ladder)
+
+Inputs:
+
+* Global monthly cap (e.g., $1,000)
+* Per-user soft cap (optional)
+* Real-time ?spend ledger? from completed API calls
+
+Responsibilities:
+
+* Estimate cost **before** doing work (especially images)
+* Decide allowed configuration per request:
+
+  * candidate_count (30/20/10)
+  * finalize_max (9/6/3)
+  * image quality tier (low/medium/high)
+  * whether ?New batch? button is enabled
+
+Degradation ladder example (must be configurable):
+
+1. reduce candidates 30 ? 20 ? 10
+2. reduce finalize max 9 ? 3
+3. disable ?New batch?
+4. tighten weekly quota (only if absolutely necessary)
+
+## 3.3 Privacy/PII Scrubber (Non-LLM)
+
+Before storing or sending input to AI:
+
+* Redact phone numbers, emails, addresses (basic regex-based)
+* Remove obvious personal identifiers if detected (best-effort)
+
+Store:
+
+* redacted input for reproducibility
+* optionally raw input for short retention window (7?14 days) only if you choose
+
+## 3.4 AI Workflow Modules (?Agents? as deterministic steps)
+
+These are just backend functions + prompts returning JSON.
+
+Minimum:
+
+1. **Extractor**: input text ? structured business signals
+2. **Copywriter**: signals ? platform-tailored caption(s)
+3. **Risk Checker**: caption ? flags + safer rewrite suggestion
+4. **Image Pipeline**:
+
+   * candidates_low: one-shot gallery (20/30) low quality
+   * finalize_high: only selected images, high quality
+
+---
+
+# 4) Image Pipeline (Key architecture update)
+
+## 4.1 Why this exists
+
+We intentionally remove unlimited ?regen images?. Instead:
+
+* One ?Generate images? produces a **candidate gallery**
+* User selects winners (?9)
+* Only winners are finalized at high quality
+
+This controls cost while keeping perceived quality.
+
+## 4.2 Candidate generation implementation
+
+User clicks ?Generate Images (One Shot)?.
+
+Backend creates one **candidate batch job**:
+
+* target_count = 20 (configurable 10/20/30)
+* quality = low
+* Under the hood, worker may do multiple calls (e.g., 2 ? 10) due to per-request limits.
+* Store each candidate image with metadata and a stable ID.
+
+## 4.3 Selection + finalization
+
+User selects up to 9 candidates and clicks ?Finalize Selected (High Quality)?.
+
+Backend creates one **finalize job**:
+
+* selected_candidate_ids[] (<=9)
+* quality = high
+* Worker generates final images and writes them to storage + DB
+
+## 4.4 Optional ?New batch?
+
+If enabled by budget:
+
+* allow **max 1 additional candidate batch per post**
+* selecting candidates from multiple batches is allowed, but finalization still caps at 9 total.
+
+---
+
+# 5) API Surface (Minimum Endpoints)
+
+### Auth / Session
+
+* `POST /session` ? creates session token if needed
+
+### Business + Platforms
+
+* `POST /business`
+* `PATCH /business/:id`
+* `POST /business/:id/platforms` (enforce max 2)
+* `DELETE /business/:id/platforms/:platform_id`
+
+### Ingest
+
+* `POST /ingest`
+
+  * runs PII scrub
+  * stores redacted text
+  * returns `ingest_id`
+
+### Post generation (text)
+
+* `POST /posts/generate` (user-initiated only; no background/auto-generation)
+
+  * checks quota (posts/week/platform)
+  * checks budget (text portion)
+  * runs Extractor + Copywriter + Risk Checker
+  * creates `post` records (drafts)
+
+### Edit caption
+
+* `POST /posts/:post_id/revise-text`
+
+  * runs Copywriter (rewrite) + optional Risk Checker
+
+### Image candidates
+
+* `POST /posts/:post_id/images/candidates`
+
+  * checks budget & per-post batch limits
+  * enqueues candidate batch job
+  * returns job id
+
+### Finalize selected
+
+* `POST /posts/:post_id/images/finalize`
+
+  * validates <=9 selected
+  * checks budget
+  * enqueues finalize job
+
+### Status polling (or server-sent events)
+
+* `GET /jobs/:job_id`
+
+  * returns status + progress + result refs
+
+### Export + Feedback
+
+* `POST /posts/:post_id/mark-used`
+* `POST /feedback`
+* `POST /event` (optional if not using direct analytics SDK)
+
+---
+
+# 6) Data Model (Postgres tables)
+
+You can implement minimal first and expand later.
+
+## 6.1 Identity
+
+* `users` (optional)
+
+  * id, email (nullable), created_at
+* `sessions`
+
+  * id, created_at, last_seen_at, linked_user_id (nullable)
+
+## 6.2 Business
+
+* `businesses`
+
+  * id, owner_type (user/session), owner_id
+  * region (OC/Thailand), default_language, tone_preset
+  * business_category, created_at
+
+* `business_platforms`
+
+  * id, business_id, platform_type
+  * UNIQUE(business_id, platform_type)
+  * enforce count <= 2 at application layer (and optionally via constraint strategy)
+
+## 6.3 Ingest + Posts
+
+* `ingests`
+
+  * id, business_id
+  * redacted_text
+  * raw_text_storage_key (nullable, if storing raw temporarily)
+  * created_at, deleted_at (for retention)
+
+* `posts`
+
+  * id, business_id, platform_type
+  * week_start_date
+  * post_type (tip/faq/story/offer/etc.)
+  * caption_text
+  * risk_flags (json)
+  * status (draft / images_pending / ready_to_export / exported)
+  * created_at
+
+## 6.4 Images
+
+* `image_batches`
+
+  * id, post_id
+  * stage (candidate_low / final_high)
+  * requested_count
+  * quality (low/high)
+  * status (queued/running/succeeded/failed)
+  * created_at, completed_at
+
+* `post_images`
+
+  * id, post_id, batch_id
+  * stage (candidate_low/final_high)
+  * storage_key (object path)
+  * selected (boolean)
+  * source_candidate_id (nullable; link final back to candidate)
+  * created_at
+
+## 6.5 Quotas
+
+* `weekly_quota_usage`
+
+  * id, business_id, platform_type, week_start_date
+  * posts_used_count
+  * updated_at
+
+* `post_image_usage`
+
+  * post_id
+  * candidate_batches_used
+  * finalized_count
+  * updated_at
+
+## 6.6 Spend ledger (critical for budget enforcement)
+
+* `api_cost_ledger`
+
+  * id, owner_type (user/session), owner_id
+  * provider (openai)
+  * kind (text / image)
+  * model
+  * units (tokens or images)
+  * cost_usd_estimated
+  * request_id (for traceability)
+  * created_at (month bucket via timestamp)
+
+## 6.7 Analytics & Feedback
+
+* `events`
+
+  * id, owner_type, owner_id
+  * event_name
+  * props (json)
+  * created_at
+
+* `feedback`
+
+  * id, post_id
+  * rating (up/down)
+  * comment (nullable)
+  * created_at
+
+---
+
+# 7) Runtime Cost Control (How the system prevents surprises)
+
+## 7.1 Before any generation call
+
+Budget service checks:
+
+* monthly remaining budget
+* projected cost of action
+* user?s current month consumption (optional)
+
+## 7.2 On image candidate request
+
+Budget service sets allowed params:
+
+* `candidate_count_allowed` (10/20/30)
+* `quality_allowed` (low)
+* `new_batch_allowed` (true/false)
+
+## 7.3 On finalize
+
+Budget service sets:
+
+* `finalize_max_allowed` (9/6/3)
+* `quality_allowed` (high or downgrade to medium if you implement it)
+* hard reject if selection > allowed
+
+## 7.4 Logging
+
+Every completed provider call must write a ledger row so budget decisions are based on truth.
+
+---
+
+# 8) Security & Privacy Requirements
+
+* No phone/name required
+* Input warnings: ?Don?t paste sensitive personal data?
+* PII scrubbing before storage + before AI calls
+* UUIDs for all public IDs
+* Access control: session/user can only access their own businesses/posts/images
+* Retention: auto-delete raw inputs after 7?14 days (configurable)
+
+---
+
+# 9) Reliability Requirements
+
+* Async jobs for candidate/final images
+* Retries with backoff on transient failures
+* Idempotency keys for job creation (avoid duplicate batches on double-click)
+* Timeouts and fallbacks:
+
+  * if image generation fails, user can still export caption
+* Observability:
+
+  * error logs + job failure counts
+  * spend anomalies (alerts at 70/85/95% budget)
+
+---
+
+# 10) Deployment (Minimal, Practical)
+
+* Frontend: Vercel / Cloudflare Pages
+* Backend API: Render / Fly.io / Cloud Run
+* Postgres + Storage: Supabase (simple all-in-one) or Neon + S3/R2
+* Queue: Upstash Redis + worker service
+* Analytics: PostHog (optional) + DB events
+
+---
+
+# 11) Architecture ?Done? Checklist (Acceptance Criteria)
+
+Must be true:
+
+* Cannot add a 3rd platform
+* Cannot exceed 2 posts/platform/week
+* Image candidate generation is one-shot (plus optional 1 extra batch max)
+* Candidate gallery produced at low quality; finalize produces high quality
+* User cannot finalize more than 9 images per post
+* Budget ladder can reduce candidate_count and finalize_max automatically
+* Spend ledger records every AI call
+* Events are logged for all key funnel steps
+* PII scrub happens before storage and AI calls
