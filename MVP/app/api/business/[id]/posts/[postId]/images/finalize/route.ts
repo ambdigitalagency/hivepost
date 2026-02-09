@@ -111,6 +111,21 @@ export async function POST(
     status: "running",
   });
 
+  let hasReferenceMaterials = false;
+  try {
+    const { count: materialsCount } = await supabaseAdmin
+      .from("business_materials")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", businessId);
+    const { count: ingestsCount } = await supabaseAdmin
+      .from("ingests")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", businessId);
+    hasReferenceMaterials = (materialsCount ?? 0) > 0 || (ingestsCount ?? 0) > 0;
+  } catch {
+    // ignore
+  }
+
   const imagePrompt = await captionToImagePrompt({
     caption,
     category: business.category ?? undefined,
@@ -118,6 +133,8 @@ export async function POST(
     city: business.city ?? undefined,
     state: business.state ?? undefined,
     language: business.language ?? undefined,
+    purpose: "finalize",
+    hasReferenceMaterials,
   });
 
   const costPerImage = estimateFinalImageCostUsd();
