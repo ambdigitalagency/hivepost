@@ -178,28 +178,24 @@ export async function POST(
     return NextResponse.json({ error: batchErr.message }, { status: 500 });
   }
 
-  const imagePrompt =
-    post.image_prompt?.trim() ||
-    (await captionToImagePrompt({
-      caption,
-      category: business?.category ?? undefined,
-      businessName: business?.name ?? undefined,
-      city: business?.city ?? undefined,
-      state: business?.state ?? undefined,
-      language: business?.language ?? undefined,
-    }));
+  const imagePrompt = await captionToImagePrompt({
+    caption,
+    category: business?.category ?? undefined,
+    businessName: business?.name ?? undefined,
+    city: business?.city ?? undefined,
+    state: business?.state ?? undefined,
+    language: business?.language ?? undefined,
+  });
 
-  if (!post.image_prompt?.trim()) {
-    const { error: updateErr } = await supabaseAdmin
-      .from("posts")
-      .update({ image_prompt: imagePrompt })
-      .eq("id", pid)
-      .eq("business_id", bid);
-    // 未跑 003 迁移时无 image_prompt 列 (42703/PGRST204)，忽略
-    const ignorable = ["42703", "PGRST204"];
-    if (updateErr && !ignorable.includes(updateErr.code ?? "")) {
-      console.warn("Update image_prompt failed", updateErr);
-    }
+  const { error: updateErr } = await supabaseAdmin
+    .from("posts")
+    .update({ image_prompt: imagePrompt })
+    .eq("id", pid)
+    .eq("business_id", bid);
+  // 未跑 003 迁移时无 image_prompt 列 (42703/PGRST204)，忽略
+  const ignorable = ["42703", "PGRST204"];
+  if (updateErr && !ignorable.includes(updateErr.code ?? "")) {
+    console.warn("Update image_prompt failed", updateErr);
   }
 
   const costPerImage = estimateCandidateImageCostUsd();

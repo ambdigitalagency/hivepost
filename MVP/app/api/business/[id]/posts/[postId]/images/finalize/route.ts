@@ -111,16 +111,14 @@ export async function POST(
     status: "running",
   });
 
-  const imagePrompt =
-    post.image_prompt?.trim() ||
-    (await captionToImagePrompt({
-      caption,
-      category: business.category ?? undefined,
-      businessName: business.name ?? undefined,
-      city: business.city ?? undefined,
-      state: business.state ?? undefined,
-      language: business.language ?? undefined,
-    }));
+  const imagePrompt = await captionToImagePrompt({
+    caption,
+    category: business.category ?? undefined,
+    businessName: business.name ?? undefined,
+    city: business.city ?? undefined,
+    state: business.state ?? undefined,
+    language: business.language ?? undefined,
+  });
 
   const costPerImage = estimateFinalImageCostUsd();
   const REPLICATE_DELAY_MS = 11000;
@@ -158,7 +156,7 @@ export async function POST(
           write({ type: "error", index: idx });
           continue;
         }
-    let buffer: Buffer;
+    let buffer: Buffer = Buffer.alloc(0);
     let fetchOk = false;
     for (let attempt = 0; attempt < 3 && !fetchOk; attempt++) {
       try {

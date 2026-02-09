@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 type CandidateImage = { id: string; url: string };
 
@@ -51,10 +52,11 @@ export function PostDetailClient({
   captionText,
   candidateImages,
   finalImages,
-  newBatchAllowed,
+  newBatchAllowed: _newBatchAllowed, // reserved for future "New batch" UI
   maxFinalCount,
   labels,
 }: PostDetailClientProps) {
+  void _newBatchAllowed;
   const router = useRouter();
   const [generating, setGenerating] = useState(false);
   const [generatingImages, setGeneratingImages] = useState(false);
@@ -419,27 +421,31 @@ export function PostDetailClient({
                     return slot ? (
                       <div
                         key={`final-${i}`}
-                        className="overflow-hidden rounded border-2 border-emerald-500"
+                        className="relative h-24 overflow-hidden rounded border-2 border-emerald-500 sm:h-32"
                       >
-                        <img
+                        <Image
                           src={slot.url}
                           alt=""
-                          className="h-24 w-full object-cover sm:h-32"
+                          fill
+                          sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw"
+                          className="object-cover"
                         />
                       </div>
                     ) : (
                       <div
                         key={`finalizing-${i}`}
-                        className="relative overflow-hidden rounded border-2 border-dashed border-neutral-300 dark:border-neutral-600"
+                        className="relative h-24 overflow-hidden rounded border-2 border-dashed border-neutral-300 sm:h-32 dark:border-neutral-600"
                       >
                         {candidateUrl ? (
-                          <img
+                          <Image
                             src={candidateUrl}
                             alt=""
-                            className="h-24 w-full object-cover blur-md sm:h-32"
+                            fill
+                            sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw"
+                            className="object-cover blur-md"
                           />
                         ) : (
-                          <div className="flex h-24 items-center justify-center bg-neutral-100 sm:h-32 dark:bg-neutral-800">
+                          <div className="flex h-full items-center justify-center bg-neutral-100 dark:bg-neutral-800">
                             <span className="text-xs text-neutral-500">…</span>
                           </div>
                         )}
@@ -468,11 +474,15 @@ export function PostDetailClient({
                               : "border-neutral-200 dark:border-neutral-600"
                           } ${!selected && !canSelectMore ? "opacity-60" : ""}`}
                         >
-                          <img
-                            src={img.url}
-                            alt=""
-                            className="h-24 w-full object-cover sm:h-32"
-                          />
+                          <div className="relative h-24 w-full sm:h-32">
+                            <Image
+                              src={img.url}
+                              alt=""
+                              fill
+                              sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw"
+                              className="object-cover"
+                            />
+                          </div>
                           {selected && (
                             <span className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-xs font-medium text-white">
                               ✓
@@ -493,11 +503,15 @@ export function PostDetailClient({
                               : "border-neutral-200 dark:border-neutral-600"
                           } ${!selectedIds.has(slot.id) && !canSelectMore ? "opacity-60" : ""}`}
                         >
-                          <img
-                            src={slot.url}
-                            alt=""
-                            className="h-24 w-full object-cover sm:h-32"
-                          />
+                          <div className="relative h-24 w-full sm:h-32">
+                            <Image
+                              src={slot.url}
+                              alt=""
+                              fill
+                              sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw"
+                              className="object-cover"
+                            />
+                          </div>
                           {selectedIds.has(slot.id) && (
                             <span className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-xs font-medium text-white">
                               ✓
@@ -543,13 +557,17 @@ export function PostDetailClient({
                 href={img.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block overflow-hidden rounded border border-neutral-200 dark:border-neutral-600"
+                className="relative block overflow-hidden rounded border border-neutral-200 dark:border-neutral-600"
               >
-                <img
-                  src={img.url}
-                  alt=""
-                  className="h-24 w-full object-cover sm:h-32"
-                />
+                <div className="relative h-24 w-full sm:h-32">
+                  <Image
+                    src={img.url}
+                    alt=""
+                    fill
+                    sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw"
+                    className="object-cover"
+                  />
+                </div>
               </a>
             ))}
           </div>
