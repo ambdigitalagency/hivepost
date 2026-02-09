@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 type CandidateImage = { id: string; url: string };
@@ -20,6 +20,8 @@ type PostDetailClientProps = {
     caption: string;
     editCaption: string;
     generateImages: string;
+    imageGenerationTimeHint: string;
+    candidateImagesHint: string;
     placeholder: string;
     quotaExceeded: string;
     budgetExceeded: string;
@@ -63,6 +65,11 @@ export function PostDetailClient({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState(false);
   const [showFirstUseMessage, setShowFirstUseMessage] = useState(false);
+  const [streamingSlots, setStreamingSlots] = useState<(null | { id: string; url: string })[] | null>(null);
+  const [streamingEstimatedMinutes, setStreamingEstimatedMinutes] = useState<number | null>(null);
+  const [finalizingSlots, setFinalizingSlots] = useState<(null | { url: string })[] | null>(null);
+  const [finalizingOrder, setFinalizingOrder] = useState<string[]>([]);
+  const candidatesAbortRef = useRef<AbortController | null>(null);
 
   const isPlanned = status === "planned";
   const isDraft = status === "draft";
@@ -106,15 +113,19 @@ export function PostDetailClient({
   }
 
   async function handleGenerateImages() {
+    const ac = new AbortController();
+    candidatesAbortRef.current = ac;
     setGeneratingImages(true);
     setError(null);
+    setStreamingSlots(null);
+    setStreamingEstimatedMinutes(null);
     try {
       const res = await fetch(
         `/api/business/${businessId}/posts/${postId}/images/candidates`,
-        { method: "POST" }
+        { method: "POST", signal: ac.signal }
       );
-      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
         let msg = data.message ?? data.error ?? "Request failed";
         if (data.error === "budget_exceeded") msg = labels.budgetExceeded;
         else if (data.error === "image_service_unconfigured") msg = labels.imageServiceUnconfigured;
@@ -122,11 +133,61 @@ export function PostDetailClient({
         setError(msg);
         return;
       }
-      router.refresh();
-    } catch {
-      setError("Network error");
+      const reader = res.body?.getReader();
+      if (!reader) {
+        setError("Stream not available");
+        return;
+      }
+      const decoder = new TextDecoder();
+      let buffer = "";
+      const processLine = (line: string) => {
+        if (!line.trim()) return;
+        try {
+          const ev = JSON.parse(line) as {
+            type?: string;
+            count?: number;
+            estimatedMinutes?: number;
+            index?: number;
+            id?: string;
+            url?: string;
+            error?: string;
+            total?: number;
+          };
+          if (ev.type === "start") {
+            const n = ev.count ?? 0;
+            setStreamingSlots(Array(n).fill(null));
+            setStreamingEstimatedMinutes(ev.estimatedMinutes ?? null);
+          } else if (ev.type === "image" && typeof ev.index === "number" && ev.id && ev.url) {
+            setStreamingSlots((prev) => {
+              if (!prev) return prev;
+              const next = [...prev];
+              next[ev.index!] = { id: ev.id!, url: ev.url! };
+              return next;
+            });
+          } else if (ev.type === "done") {
+            if (ev.error) setError(ev.error);
+            router.refresh();
+          }
+        } catch {
+          // ignore parse errors
+        }
+      };
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) processLine(line);
+      }
+      if (buffer.trim()) processLine(buffer);
+    } catch (e) {
+      if ((e as Error)?.name !== "AbortError") setError("Network error");
     } finally {
+      candidatesAbortRef.current = null;
       setGeneratingImages(false);
+      setStreamingSlots(null);
+      setStreamingEstimatedMinutes(null);
     }
   }
 
@@ -160,19 +221,28 @@ export function PostDetailClient({
 
   async function handleFinalize() {
     if (selectedIds.size === 0) return;
+    const ids = Array.from(selectedIds);
+    if (generatingImages && candidatesAbortRef.current) {
+      candidatesAbortRef.current.abort();
+      setGeneratingImages(false);
+      setStreamingEstimatedMinutes(null);
+    }
     setFinalizing(true);
     setError(null);
+    setFinalizingSlots(Array(ids.length).fill(null));
+    setFinalizingOrder(ids);
+    setSelectedIds(new Set());
     try {
       const res = await fetch(
         `/api/business/${businessId}/posts/${postId}/images/finalize`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ selectedImageIds: Array.from(selectedIds) }),
+          body: JSON.stringify({ selectedImageIds: ids }),
         }
       );
-      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
         setError(
           data.error === "finalize_limit"
             ? labels.finalizeLimitExceeded
@@ -182,15 +252,61 @@ export function PostDetailClient({
         );
         return;
       }
-      setSelectedIds(new Set());
-      if (data.failedCount > 0 && data.message) {
-        setError(data.message);
+      const reader = res.body?.getReader();
+      if (!reader) {
+        setError("Stream not available");
+        return;
       }
-      router.refresh();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      const processLine = (line: string) => {
+        if (!line.trim()) return;
+        try {
+          const ev = JSON.parse(line) as {
+            type?: string;
+            count?: number;
+            index?: number;
+            url?: string;
+            error?: string;
+            total?: number;
+          };
+          if (ev.type === "start" && ev.count != null) {
+            setFinalizingSlots((prev) => {
+              const targetLen = ev.count!;
+              if (prev && prev.length === targetLen) return prev;
+              return Array(targetLen).fill(null);
+            });
+          } else if (ev.type === "image" && typeof ev.index === "number" && ev.url) {
+            setFinalizingSlots((prev) => {
+              if (!prev) return prev;
+              const next = [...prev];
+              next[ev.index!] = { url: ev.url! };
+              return next;
+            });
+          } else if (ev.type === "done") {
+            if (ev.error) setError(ev.error);
+            router.refresh();
+          }
+        } catch {
+          /* ignore */
+        }
+      };
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) processLine(line);
+      }
+      if (buffer.trim()) processLine(buffer);
     } catch {
       setError("Network error");
     } finally {
       setFinalizing(false);
+      setFinalizingSlots(null);
+      setFinalizingOrder([]);
+      setStreamingSlots(null);
     }
   }
 
@@ -257,7 +373,7 @@ export function PostDetailClient({
       {showCandidateArea && (
         <div className="rounded-xl border border-card-border bg-card-bg p-4 shadow-card">
           <h2 className="mb-2 text-sm font-medium text-foreground">{labels.generateImages}</h2>
-          {!hasCandidates && (
+          {!hasCandidates && !hasFinals && !streamingSlots && (
             <>
               <button
                 type="button"
@@ -269,75 +385,149 @@ export function PostDetailClient({
               </button>
               {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
               {generatingImages && (
-                <p className="mt-2 text-sm text-neutral-500">
-                  This may take a minute (generating multiple images).
-                </p>
+                <div className="mt-2 space-y-1 text-sm text-neutral-500">
+                  <p>
+                    {labels.imageGenerationTimeHint.replace(
+                      "{{n}}",
+                      String(streamingEstimatedMinutes ?? "5–15")
+                    )}
+                  </p>
+                  <p>{labels.candidateImagesHint}</p>
+                </div>
               )}
             </>
           )}
-          {hasCandidates && (
+          {(hasCandidates || streamingSlots) && (
             <>
-              <p className="mb-3 text-sm text-neutral-600 dark:text-neutral-400">
+              <p className="mb-1 text-sm text-neutral-600 dark:text-neutral-400">
                 {labels.candidateGallery} · {labels.selectUpToN}
               </p>
-              {newBatchAllowed && (
-                <div className="mb-3">
-                  <button
-                    type="button"
-                    onClick={handleGenerateImages}
-                    disabled={generatingImages}
-                    className={btnSecondary}
-                  >
-                    {generatingImages ? labels.generating : labels.newBatch}
-                  </button>
-                  {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-                  {generatingImages && (
-                    <p className="mt-2 text-sm text-neutral-500">
-                      This may take a minute (generating multiple images).
-                    </p>
-                  )}
-                </div>
+              <p className="mb-3 text-sm text-neutral-500">{labels.candidateImagesHint}</p>
+              {streamingSlots && !finalizingSlots && (
+                <p className="mb-3 text-sm text-neutral-500">
+                  {labels.imageGenerationTimeHint.replace("{{n}}", String(streamingEstimatedMinutes ?? "5–15"))}
+                </p>
               )}
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-                {candidateImages.map((img) => {
-                  const selected = selectedIds.has(img.id);
-                  return (
+              {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
+              {finalizingSlots ? (
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+                  {finalizingSlots.map((slot, i) => {
+                    const candidateId = finalizingOrder[i];
+                    const candidateUrl =
+                      candidateImages.find((c) => c.id === candidateId)?.url ??
+                      streamingSlots?.find((s) => s?.id === candidateId)?.url;
+                    return slot ? (
+                      <div
+                        key={`final-${i}`}
+                        className="overflow-hidden rounded border-2 border-emerald-500"
+                      >
+                        <img
+                          src={slot.url}
+                          alt=""
+                          className="h-24 w-full object-cover sm:h-32"
+                        />
+                      </div>
+                    ) : (
+                      <div
+                        key={`finalizing-${i}`}
+                        className="relative overflow-hidden rounded border-2 border-dashed border-neutral-300 dark:border-neutral-600"
+                      >
+                        {candidateUrl ? (
+                          <img
+                            src={candidateUrl}
+                            alt=""
+                            className="h-24 w-full object-cover blur-md sm:h-32"
+                          />
+                        ) : (
+                          <div className="flex h-24 items-center justify-center bg-neutral-100 sm:h-32 dark:bg-neutral-800">
+                            <span className="text-xs text-neutral-500">…</span>
+                          </div>
+                        )}
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                          <span className="text-sm font-medium text-white drop-shadow">
+                            {labels.finalizing}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+                    {candidateImages.map((img) => {
+                      const selected = selectedIds.has(img.id);
+                      return (
+                        <button
+                          key={img.id}
+                          type="button"
+                          onClick={() => toggleSelected(img.id)}
+                          className={`relative block overflow-hidden rounded border-2 text-left transition focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                            selected
+                              ? "border-blue-600 ring-2 ring-blue-400"
+                              : "border-neutral-200 dark:border-neutral-600"
+                          } ${!selected && !canSelectMore ? "opacity-60" : ""}`}
+                        >
+                          <img
+                            src={img.url}
+                            alt=""
+                            className="h-24 w-full object-cover sm:h-32"
+                          />
+                          {selected && (
+                            <span className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-xs font-medium text-white">
+                              ✓
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                    {streamingSlots?.map((slot, i) =>
+                      slot ? (
+                        <button
+                          key={slot.id}
+                          type="button"
+                          onClick={() => toggleSelected(slot.id)}
+                          className={`relative block overflow-hidden rounded border-2 text-left transition focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                            selectedIds.has(slot.id)
+                              ? "border-blue-600 ring-2 ring-blue-400"
+                              : "border-neutral-200 dark:border-neutral-600"
+                          } ${!selectedIds.has(slot.id) && !canSelectMore ? "opacity-60" : ""}`}
+                        >
+                          <img
+                            src={slot.url}
+                            alt=""
+                            className="h-24 w-full object-cover sm:h-32"
+                          />
+                          {selectedIds.has(slot.id) && (
+                            <span className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-xs font-medium text-white">
+                              ✓
+                            </span>
+                          )}
+                        </button>
+                      ) : (
+                        <div
+                          key={`placeholder-${i}`}
+                          className="flex h-24 items-center justify-center rounded border-2 border-dashed border-neutral-300 bg-neutral-100 sm:h-32 dark:border-neutral-600 dark:bg-neutral-800"
+                          aria-hidden
+                        >
+                          <span className="text-xs text-neutral-500">…</span>
+                        </div>
+                      )
+                    )}
+                  </div>
+                  <div className="mt-3 flex items-center gap-3">
                     <button
-                      key={img.id}
                       type="button"
-                      onClick={() => toggleSelected(img.id)}
-                      className={`relative block overflow-hidden rounded border-2 text-left transition focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                        selected
-                          ? "border-blue-600 ring-2 ring-blue-400"
-                          : "border-neutral-200 dark:border-neutral-600"
-                      } ${!selected && !canSelectMore ? "opacity-60" : ""}`}
+                      onClick={handleFinalize}
+                      disabled={selectedIds.size === 0 || finalizing}
+                      className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:opacity-50"
                     >
-                      <img
-                        src={img.url}
-                        alt=""
-                        className="h-24 w-full object-cover sm:h-32"
-                      />
-                      {selected && (
-                        <span className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-xs font-medium text-white">
-                          ✓
-                        </span>
-                      )}
+                      {finalizing ? labels.finalizing : labels.finalizeSelected}
+                      {selectedIds.size > 0 && ` (${selectedIds.size})`}
                     </button>
-                  );
-                })}
-              </div>
-              <div className="mt-3 flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={handleFinalize}
-                  disabled={selectedIds.size === 0 || finalizing}
-                  className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:opacity-50"
-                >
-                  {finalizing ? labels.finalizing : labels.finalizeSelected}
-                  {selectedIds.size > 0 && ` (${selectedIds.size})`}
-                </button>
-                {error && <p className="text-sm text-red-600">{error}</p>}
-              </div>
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>

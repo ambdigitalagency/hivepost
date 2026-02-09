@@ -61,9 +61,10 @@ export async function POST(
     .single();
   if (!business) return NextResponse.json({ error: "Business not found" }, { status: 404 });
 
+  // 不选 image_prompt 以兼容未跑 003 迁移的 DB
   const { data: post } = await supabaseAdmin
     .from("posts")
-    .select("id, status, caption_text, image_prompt")
+    .select("id, status, caption_text")
     .eq("id", postId)
     .eq("business_id", businessId)
     .single();
@@ -122,91 +123,125 @@ export async function POST(
     }));
 
   const costPerImage = estimateFinalImageCostUsd();
-  const finalized: string[] = [];
-  const failedCount: number[] = [];
   const REPLICATE_DELAY_MS = 11000;
 
-  for (let idx = 0; idx < validIds.length; idx++) {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const write = (obj: object) => {
+        controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
+      };
+      write({ type: "start", count: validIds.length });
+
+      const finalized: string[] = [];
+      const failedCount: number[] = [];
+
+      for (let idx = 0; idx < validIds.length; idx++) {
     if (idx > 0) await new Promise((r) => setTimeout(r, REPLICATE_DELAY_MS));
     const candidateId = validIds[idx];
     const candidate = validCandidates.find((c) => c.id === candidateId);
     const candidateUrl = candidate?.storage_key ? getPublicUrl(candidate.storage_key) : "";
-    if (!candidateUrl) {
-      console.warn("No candidate URL for", candidateId);
-      failedCount.push(idx + 1);
-      continue;
-    }
+        if (!candidateUrl) {
+          console.warn("No candidate URL for", candidateId);
+          failedCount.push(idx + 1);
+          write({ type: "error", index: idx });
+          continue;
+        }
     let gen = await generateOneFinalImageFromCandidate(candidateUrl, imagePrompt);
-    if (gen.error || !gen.url) {
+    for (let retry = 0; retry < 2 && (gen.error || !gen.url); retry++) {
+      await new Promise((r) => setTimeout(r, 2000));
       gen = await generateOneFinalImageFromCandidate(candidateUrl, imagePrompt);
     }
-    if (gen.error || !gen.url) {
-      console.warn("Final image gen failed after retry", gen.error);
-      failedCount.push(idx + 1);
-      continue;
-    }
+        if (gen.error || !gen.url) {
+          console.warn("Final image gen failed after retries", gen.error);
+          failedCount.push(idx + 1);
+          write({ type: "error", index: idx });
+          continue;
+        }
     let buffer: Buffer;
-    try {
-      const res = await fetch(gen.url);
-      if (!res.ok) {
-        failedCount.push(idx + 1);
-        continue;
+    let fetchOk = false;
+    for (let attempt = 0; attempt < 3 && !fetchOk; attempt++) {
+      try {
+        const res = await fetch(gen.url);
+        if (!res.ok) {
+          if (attempt < 2) await new Promise((r) => setTimeout(r, 1500));
+          else {
+            failedCount.push(idx + 1);
+            write({ type: "error", index: idx });
+            break;
+          }
+          continue;
+        }
+        buffer = Buffer.from(await res.arrayBuffer());
+        fetchOk = true;
+      } catch (e) {
+        if (attempt < 2) await new Promise((r) => setTimeout(r, 1500));
+        else {
+          console.warn("Fetch final image failed", e);
+          failedCount.push(idx + 1);
+          write({ type: "error", index: idx });
+          break;
+        }
       }
-      buffer = Buffer.from(await res.arrayBuffer());
-    } catch {
-      failedCount.push(idx + 1);
-      continue;
     }
-    const imageId = randomUUID();
+        if (!fetchOk) continue;
+        const imageId = randomUUID();
     const path = `posts/${postId}/batches/${batchId}/final-${imageId}.png`;
     const { storageKey, error: uploadErr } = await uploadPostImage(path, buffer, "image/png");
-    if (uploadErr || !storageKey) {
-      console.warn("Final upload failed", uploadErr);
-      failedCount.push(idx + 1);
-      continue;
-    }
-    await supabaseAdmin.from("post_images").insert({
+        if (uploadErr || !storageKey) {
+          console.warn("Final upload failed", uploadErr);
+          failedCount.push(idx + 1);
+          write({ type: "error", index: idx });
+          continue;
+        }
+        await supabaseAdmin.from("post_images").insert({
       post_id: postId,
       batch_id: batchId,
       stage: "final_high",
       storage_key: storageKey,
       selected: true,
       source_candidate_id: candidateId,
-    });
-    finalized.push(storageKey);
-    await recordCost({
-      ownerType: "user",
-      ownerId: userId,
-      provider: "replicate",
-      kind: "image",
-      model: "sdxl",
-      units: 1,
-      costUsdEstimated: costPerImage,
-    });
-  }
+        });
+        finalized.push(storageKey);
+        const finalUrl = getPublicUrl(storageKey);
+        write({ type: "image", index: idx, url: finalUrl });
+            await recordCost({
+          ownerType: "user",
+          ownerId: userId,
+          provider: "replicate",
+          kind: "image",
+          model: "sdxl",
+          units: 1,
+          costUsdEstimated: costPerImage,
+        });
+      }
 
-  await supabaseAdmin
-    .from("image_batches")
-    .update({ status: "succeeded", completed_at: new Date().toISOString() })
-    .eq("id", batchId);
-  await supabaseAdmin
-    .from("posts")
-    .update({ status: "ready" })
-    .eq("id", postId)
-    .eq("business_id", businessId);
+          await supabaseAdmin
+        .from("image_batches")
+        .update({ status: "succeeded", completed_at: new Date().toISOString() })
+        .eq("id", batchId);
+      await supabaseAdmin
+        .from("posts")
+        .update({ status: "ready" })
+        .eq("id", postId)
+        .eq("business_id", businessId);
 
-  await recordEvent(
-    { ownerType: "user", ownerId: userId },
-    "finalize_clicked",
-    { business_id: businessId, post_id: postId, count: finalized.length, failed: failedCount.length }
-  );
+      await recordEvent(
+        { ownerType: "user", ownerId: userId },
+        "finalize_clicked",
+        { business_id: businessId, post_id: postId, count: finalized.length, failed: failedCount.length }
+      );
 
-  return NextResponse.json({
-    success: true,
-    batchId,
-    count: finalized.length,
-    requestedCount: validIds.length,
-    failedCount: failedCount.length,
-    ...(failedCount.length > 0 && { message: `${failedCount.length} of ${validIds.length} images could not be generated.` }),
+      const err =
+        failedCount.length > 0
+          ? `${failedCount.length} of ${validIds.length} images could not be generated.`
+          : undefined;
+      write({ type: "done", total: finalized.length, failed: failedCount.length, error: err });
+      controller.close();
+    },
+  });
+
+  return new Response(stream, {
+    headers: { "Content-Type": "application/x-ndjson" },
   });
 }

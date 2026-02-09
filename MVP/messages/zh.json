@@ -111,6 +111,8 @@
     "caption": "文案",
     "editCaption": "编辑文案",
     "generateImages": "生成图片",
+    "imageGenerationTimeHint": "预计约 {{n}} 分钟完成全部图片。",
+    "candidateImagesHint": "生成的缩略图为结构示意，非最终图片；选定后将针对选中图优化生成最终图。",
     "placeholder": "点击上方按钮生成后，文案将显示在此处。",
     "quotaExceeded": "您已达到每平台每周 2 条的限额，下周再试。",
     "budgetExceeded": "本月 API 预算已用尽，请稍后再试。",

@@ -111,6 +111,8 @@
     "caption": "Caption",
     "editCaption": "Edit caption",
     "generateImages": "Generate images",
+    "imageGenerationTimeHint": "Estimated ~{{n}} minutes for all images.",
+    "candidateImagesHint": "These thumbnails are structural drafts, not final images. Final high-quality images will be generated after you select.",
     "placeholder": "Caption will appear here after generation.",
     "quotaExceeded": "You've reached the limit of 2 posts per platform per week. Try again next week.",
     "budgetExceeded": "Monthly API budget reached. Try again later.",

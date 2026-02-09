@@ -84,6 +84,22 @@ describe("POST /api/business/[id]/posts/[postId]/images/candidates", () => {
     expect(typeof body.debug.postExistsWithOtherBusiness).toBe("boolean");
   });
 
+  it("returns 404 with debug when post exists but belongs to other business", async () => {
+    mockPostsSingle.mockResolvedValue({ data: null, error: { code: "PGRST116", message: "not found" } });
+    mockPostsMaybeSingle.mockResolvedValue({
+      data: { id: "p1", business_id: "other-biz" },
+      error: null,
+    });
+    const { POST } = await import("@/app/api/business/[id]/posts/[postId]/images/candidates/route");
+    const req = new NextRequest("http://localhost/api", { method: "POST", body: "{}" });
+    const res = await POST(req, { params: Promise.resolve({ id: "b1", postId: "p1" }) });
+
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.error).toBe("Post not found");
+    expect(body.debug?.postExistsWithOtherBusiness).toBe(true);
+  });
+
   it("returns 404 with debug when businessId or postId missing", async () => {
     const { POST } = await import("@/app/api/business/[id]/posts/[postId]/images/candidates/route");
     const req = new NextRequest("http://localhost/api", { method: "POST", body: "{}" });
@@ -96,5 +112,47 @@ describe("POST /api/business/[id]/posts/[postId]/images/candidates", () => {
       receivedBusinessId: "b1",
       receivedPostId: "",
     });
+  });
+
+  it("does not return 404 when post exists and belongs to business (post found, may 503/429)", async () => {
+    mockPostsSingle.mockResolvedValue({
+      data: {
+        id: "p1",
+        business_id: "b1",
+        status: "draft",
+        caption_text: "caption text",
+        image_prompt: null,
+      },
+      error: null,
+    });
+    const { POST } = await import("@/app/api/business/[id]/posts/[postId]/images/candidates/route");
+    const req = new NextRequest("http://localhost/api/business/b1/posts/p1/images/candidates", {
+      method: "POST",
+      body: "{}",
+    });
+    const res = await POST(req, { params: Promise.resolve({ id: "b1", postId: "p1" }) });
+    expect(res.status).not.toBe(404);
+    const body = await res.json().catch(() => ({}));
+    expect(body.error).not.toBe("Post not found");
+  });
+
+  it("does not return 404 when post exists for business (same query as generate)", async () => {
+    mockPostsSingle.mockResolvedValue({
+      data: {
+        id: "p1",
+        business_id: "b1-b1-b1-b1-b1",
+        status: "draft",
+        caption_text: "x",
+        image_prompt: null,
+      },
+      error: null,
+    });
+    const { POST } = await import("@/app/api/business/[id]/posts/[postId]/images/candidates/route");
+    const req = new NextRequest("http://localhost/api/business/b1-b1-b1-b1-b1/posts/p1/images/candidates", {
+      method: "POST",
+      body: "{}",
+    });
+    const res = await POST(req, { params: Promise.resolve({ id: "b1-b1-b1-b1-b1", postId: "p1" }) });
+    expect(res.status).not.toBe(404);
   });
 });

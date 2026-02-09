@@ -49,16 +49,25 @@ export async function POST(
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const resolvedParams = await params;
-  const businessId = resolvedParams?.id ?? (resolvedParams as Record<string, string> | undefined)?.businessId;
-  const postId = resolvedParams?.postId ?? (resolvedParams as Record<string, string> | undefined)?.post_id;
+  const pathname = (() => {
+    try {
+      if (_req.url) return new URL(_req.url).pathname.replace(/\/$/, "") || "";
+      return _req.nextUrl?.pathname?.replace(/\/$/, "") ?? "";
+    } catch {
+      return _req.nextUrl?.pathname ?? "";
+    }
+  })();
+  const urlMatch = pathname.match(/\/api\/business\/([^/]+)\/posts\/([^/]+)\/images\/candidates/);
+  const bid = (urlMatch?.[1] ?? resolvedParams?.id ?? (resolvedParams as Record<string, string>)?.businessId ?? "").toString().trim();
+  const pid = (urlMatch?.[2] ?? resolvedParams?.postId ?? (resolvedParams as Record<string, string>)?.post_id ?? "").toString().trim();
 
   // #region agent log
-  debugLog({ location: "candidates/route.ts:params", message: "params", data: { businessId, postId, resolvedKeys: resolvedParams ? Object.keys(resolvedParams) : [] }, timestamp: Date.now(), hypothesisId: "H1" });
+  debugLog({ location: "candidates/route.ts:params", message: "params", data: { bid, pid, fromUrl: !!urlMatch, pathname, paramsKeys: resolvedParams ? Object.keys(resolvedParams) : [] }, timestamp: Date.now(), hypothesisId: "H1" });
   // #endregion
 
-  if (!businessId || !postId) {
+  if (!bid || !pid) {
     return NextResponse.json(
-      { error: "Post not found", debug: { receivedBusinessId: businessId, receivedPostId: postId } },
+      { error: "Post not found", debug: { receivedBusinessId: bid, receivedPostId: pid, pathname, paramsReceived: resolvedParams } },
       { status: 404 }
     );
   }
@@ -66,34 +75,44 @@ export async function POST(
   const { data: business } = await supabaseAdmin
     .from("businesses")
     .select("id, category, name, city, state, language")
-    .eq("id", businessId)
+    .eq("id", bid)
     .eq("user_id", userId)
     .single();
   if (!business)
     return NextResponse.json({ error: "Business not found" }, { status: 404 });
 
+  // 与 generate 路由一致：.eq("id", pid).eq("business_id", bid).single()；不选 image_prompt 以兼容未跑 003 迁移的 DB
   const { data: post, error: postErr } = await supabaseAdmin
     .from("posts")
-    .select("id, status, caption_text, image_prompt")
-    .eq("id", postId)
-    .eq("business_id", businessId)
+    .select("id, business_id, status, caption_text")
+    .eq("id", pid)
+    .eq("business_id", bid)
     .single();
 
   let postExistsWithOtherBusiness = false;
-  if (!post && postId) {
-    const { data: anyPost } = await supabaseAdmin.from("posts").select("id, business_id").eq("id", postId).maybeSingle();
+  if (!post && pid) {
+    const { data: anyPost } = await supabaseAdmin
+      .from("posts")
+      .select("id, business_id")
+      .eq("id", pid)
+      .maybeSingle();
     postExistsWithOtherBusiness = !!anyPost;
   }
 
   // #region agent log
-  debugLog({ location: "candidates/route.ts:postQuery", message: "post query result", data: { postFound: !!post, postErrCode: postErr?.code, postErrMessage: postErr?.message, postExistsWithOtherBusiness }, timestamp: Date.now(), hypothesisId: "H2" });
+  debugLog({ location: "candidates/route.ts:postQuery", message: "post query result", data: { postFound: !!post, postErrCode: postErr?.code, postExistsWithOtherBusiness }, timestamp: Date.now(), hypothesisId: "H2" });
   // #endregion
 
   if (!post) {
     return NextResponse.json(
       {
         error: "Post not found",
-        debug: { businessId, postId, postExistsWithOtherBusiness },
+        debug: {
+          businessId: bid,
+          postId: pid,
+          postExistsWithOtherBusiness,
+          pathnameUsed: pathname || null,
+        },
       },
       { status: 404 }
     );
@@ -125,7 +144,7 @@ export async function POST(
   const { count: existingBatchCount } = await supabaseAdmin
     .from("image_batches")
     .select("*", { count: "exact", head: true })
-    .eq("post_id", postId)
+    .eq("post_id", pid)
     .eq("stage", "candidate_low");
 
   const newBatchCheck = await checkBudgetForNewBatch(existingBatchCount ?? 0);
@@ -148,7 +167,7 @@ export async function POST(
   const batchId = randomUUID();
   const { error: batchErr } = await supabaseAdmin.from("image_batches").insert({
     id: batchId,
-    post_id: postId,
+    post_id: pid,
     stage: "candidate_low",
     requested_count: count,
     quality: "low",
@@ -171,93 +190,128 @@ export async function POST(
     }));
 
   if (!post.image_prompt?.trim()) {
-    await supabaseAdmin
+    const { error: updateErr } = await supabaseAdmin
       .from("posts")
       .update({ image_prompt: imagePrompt })
-      .eq("id", postId)
-      .eq("business_id", businessId);
+      .eq("id", pid)
+      .eq("business_id", bid);
+    // 未跑 003 迁移时无 image_prompt 列 (42703/PGRST204)，忽略
+    const ignorable = ["42703", "PGRST204"];
+    if (updateErr && !ignorable.includes(updateErr.code ?? "")) {
+      console.warn("Update image_prompt failed", updateErr);
+    }
   }
 
   const costPerImage = estimateCandidateImageCostUsd();
-  const created: string[] = [];
-  let lastError: string | null = null;
   const REPLICATE_DELAY_MS = 11000;
+  const estimatedMinutes = Math.ceil((count * (30 + 11)) / 60);
 
-  for (let i = 0; i < count; i++) {
-    if (i > 0) await new Promise((r) => setTimeout(r, REPLICATE_DELAY_MS));
-    const gen = await generateOneCandidateImage(imagePrompt);
-    if (gen.error || !gen.url) {
-      lastError = gen.error ?? "No image URL in response";
-      console.warn("Candidate image gen failed", lastError);
-      continue;
-    }
-    let buffer: Buffer;
-    try {
-      const res = await fetch(gen.url);
-      if (!res.ok) continue;
-      const ab = await res.arrayBuffer();
-      buffer = Buffer.from(ab);
-    } catch {
-      continue;
-    }
-    const imageId = randomUUID();
-    const path = `posts/${postId}/batches/${batchId}/${imageId}.png`;
-    const { storageKey, error: uploadErr } = await uploadPostImage(path, buffer, "image/png");
-    if (uploadErr || !storageKey) {
-      console.warn("Upload failed", uploadErr);
-      continue;
-    }
-    const { data: imgRow } = await supabaseAdmin
-      .from("post_images")
-      .insert({
-        post_id: postId,
-        batch_id: batchId,
-        stage: "candidate_low",
-        storage_key: storageKey,
-        selected: false,
-      })
-      .select("id")
-      .single();
-    if (imgRow) created.push(imgRow.id);
-    await recordCost({
-      ownerType: "user",
-      ownerId: userId,
-      provider: "replicate",
-      kind: "image",
-      model: "sdxl",
-      units: 1,
-      costUsdEstimated: costPerImage,
-    });
-  }
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const write = (obj: object) => {
+        controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
+      };
+      write({ type: "start", count, estimatedMinutes });
 
-  await supabaseAdmin
-    .from("image_batches")
-    .update({ status: "succeeded", completed_at: new Date().toISOString() })
-    .eq("id", batchId);
-  await supabaseAdmin
-    .from("posts")
-    .update({ status: "images_pending" })
-    .eq("id", postId)
-    .eq("business_id", businessId);
+      const created: string[] = [];
+      let lastError: string | null = null;
 
-  await recordEvent(
-    { ownerType: "user", ownerId: userId },
-    "candidate_images_created",
-    { business_id: businessId, post_id: postId, batch_id: batchId, count: created.length }
-  );
+      for (let i = 0; i < count; i++) {
+        if (i > 0) await new Promise((r) => setTimeout(r, REPLICATE_DELAY_MS));
+        const gen = await generateOneCandidateImage(imagePrompt);
+        if (gen.error || !gen.url) {
+          lastError = gen.error ?? "No image URL in response";
+          console.warn("Candidate image gen failed", lastError);
+          write({ type: "error", index: i, message: lastError });
+          continue;
+        }
+        let buffer: Buffer;
+        try {
+          const res = await fetch(gen.url);
+          if (!res.ok) {
+            write({ type: "error", index: i, message: "Fetch image failed" });
+            continue;
+          }
+          const ab = await res.arrayBuffer();
+          buffer = Buffer.from(ab);
+        } catch {
+          write({ type: "error", index: i, message: "Fetch image failed" });
+          continue;
+        }
+        const imageId = randomUUID();
+        const path = `posts/${pid}/batches/${batchId}/${imageId}.png`;
+        const { storageKey, error: uploadErr } = await uploadPostImage(path, buffer, "image/png");
+        if (uploadErr || !storageKey) {
+          console.warn("Upload failed", uploadErr);
+          write({ type: "error", index: i, message: uploadErr ?? "Upload failed" });
+          continue;
+        }
+        const { data: imgRow } = await supabaseAdmin
+          .from("post_images")
+          .insert({
+            post_id: pid,
+            batch_id: batchId,
+            stage: "candidate_low",
+            storage_key: storageKey,
+            selected: false,
+          })
+          .select("id")
+          .single();
+        if (imgRow) created.push(imgRow.id);
+        if (created.length === 1) {
+          await supabaseAdmin
+            .from("posts")
+            .update({ status: "images_pending" })
+            .eq("id", pid)
+            .eq("business_id", bid);
+        }
+        await recordCost({
+          ownerType: "user",
+          ownerId: userId,
+          provider: "replicate",
+          kind: "image",
+          model: "sdxl",
+          units: 1,
+          costUsdEstimated: costPerImage,
+        });
+        const { getPublicUrl } = await import("@/lib/storage");
+        const url = getPublicUrl(storageKey);
+        write({ type: "image", index: i, id: imgRow?.id ?? imageId, url });
+      }
 
-  if (created.length === 0) {
-    const isRateLimit = lastError?.includes("429") || lastError?.toLowerCase().includes("throttl");
-    const message = isRateLimit
-      ? "Replicate rate limit reached (429). Add credit at replicate.com or wait a minute and try again."
-      : lastError ?? "No images could be generated. Check REPLICATE_API_TOKEN and Supabase Storage bucket 'post-images'.";
-    return NextResponse.json({ error: "image_generation_failed", message }, { status: 500 });
-  }
+      await supabaseAdmin
+        .from("image_batches")
+        .update({ status: "succeeded", completed_at: new Date().toISOString() })
+        .eq("id", batchId);
+      await supabaseAdmin
+        .from("posts")
+        .update({ status: "images_pending" })
+        .eq("id", pid)
+        .eq("business_id", bid);
 
-  return NextResponse.json({
-    success: true,
-    batchId,
-    count: created.length,
-    requestedCount: count,
+      await recordEvent(
+        { ownerType: "user", ownerId: userId },
+        "candidate_images_created",
+        { business_id: bid, post_id: pid, batch_id: batchId, count: created.length }
+      );
+
+      const err =
+        created.length === 0
+          ? (() => {
+              const isRateLimit =
+                lastError?.includes("429") || lastError?.toLowerCase().includes("throttl");
+              return isRateLimit
+                ? "Replicate rate limit reached (429). Add credit at replicate.com or wait a minute and try again."
+                : lastError ?? "No images could be generated.";
+            })()
+          : undefined;
+      write({ type: "done", total: created.length, error: err });
+      controller.close();
+    },
+  });
+
+  return new Response(stream, {
+    headers: { "Content-Type": "application/x-ndjson" },
   });
 }

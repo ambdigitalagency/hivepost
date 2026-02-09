@@ -54,11 +54,11 @@ describe("budget", () => {
   });
 
   describe("checkBudgetForCandidates", () => {
-    it("allows candidates with candidateCount 30 when spend is 0", async () => {
+    it("allows candidates with candidateCount 20 when spend is 0", async () => {
       mockLedgerData = [];
       const result = await checkBudgetForCandidates();
       expect(result.allowed).toBe(true);
-      expect(result.candidateCount).toBe(30);
+      expect(result.candidateCount).toBe(20);
       expect(result.spendUsd).toBe(0);
       expect(result.capUsd).toBe(100);
     });
