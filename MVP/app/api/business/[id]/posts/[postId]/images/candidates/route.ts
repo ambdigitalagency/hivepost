@@ -17,6 +17,16 @@ import {
 } from "@/lib/image-generator";
 import { captionToImagePrompt } from "@/lib/image-prompt-generator";
 import { randomUUID } from "crypto";
+import { appendFileSync, mkdirSync } from "fs";
+import { join } from "path";
+
+function debugLog(payload: Record<string, unknown>) {
+  try {
+    const dir = join(process.cwd(), ".cursor");
+    mkdirSync(dir, { recursive: true });
+    appendFileSync(join(dir, "debug.log"), JSON.stringify(payload) + "\n");
+  } catch {}
+}
 
 async function getAppUserId(session: {
   user?: { id?: string; email?: string | null; name?: string | null };
@@ -38,7 +48,20 @@ export async function POST(
   const userId = await getAppUserId(session);
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { id: businessId, postId } = await params;
+  const resolvedParams = await params;
+  const businessId = resolvedParams?.id ?? (resolvedParams as Record<string, string> | undefined)?.businessId;
+  const postId = resolvedParams?.postId ?? (resolvedParams as Record<string, string> | undefined)?.post_id;
+
+  // #region agent log
+  debugLog({ location: "candidates/route.ts:params", message: "params", data: { businessId, postId, resolvedKeys: resolvedParams ? Object.keys(resolvedParams) : [] }, timestamp: Date.now(), hypothesisId: "H1" });
+  // #endregion
+
+  if (!businessId || !postId) {
+    return NextResponse.json(
+      { error: "Post not found", debug: { receivedBusinessId: businessId, receivedPostId: postId } },
+      { status: 404 }
+    );
+  }
 
   const { data: business } = await supabaseAdmin
     .from("businesses")
@@ -49,13 +72,32 @@ export async function POST(
   if (!business)
     return NextResponse.json({ error: "Business not found" }, { status: 404 });
 
-  const { data: post } = await supabaseAdmin
+  const { data: post, error: postErr } = await supabaseAdmin
     .from("posts")
     .select("id, status, caption_text, image_prompt")
     .eq("id", postId)
     .eq("business_id", businessId)
     .single();
-  if (!post) return NextResponse.json({ error: "Post not found" }, { status: 404 });
+
+  let postExistsWithOtherBusiness = false;
+  if (!post && postId) {
+    const { data: anyPost } = await supabaseAdmin.from("posts").select("id, business_id").eq("id", postId).maybeSingle();
+    postExistsWithOtherBusiness = !!anyPost;
+  }
+
+  // #region agent log
+  debugLog({ location: "candidates/route.ts:postQuery", message: "post query result", data: { postFound: !!post, postErrCode: postErr?.code, postErrMessage: postErr?.message, postExistsWithOtherBusiness }, timestamp: Date.now(), hypothesisId: "H2" });
+  // #endregion
+
+  if (!post) {
+    return NextResponse.json(
+      {
+        error: "Post not found",
+        debug: { businessId, postId, postExistsWithOtherBusiness },
+      },
+      { status: 404 }
+    );
+  }
   if (post.status !== "draft" && post.status !== "images_pending") {
     return NextResponse.json(
       { error: "Post must be in draft or have candidates (to request a new batch)" },
