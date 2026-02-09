@@ -221,7 +221,7 @@ export function BusinessForm({ labels, locale, initial, businessId, onSuccess, s
             accept=".pdf,image/jpeg,image/png,image/webp"
             multiple
             onChange={(e) => setMaterialFiles(Array.from(e.target.files ?? []))}
-            className="mt-2 block w-full text-sm text-foreground file:mr-4 file:rounded file:border-0 file:bg-neutral-100 file:px-4 file:py-2 file:text-sm file:font-medium dark:file:bg-neutral-800"
+            className="mt-2 block w-full text-sm text-foreground file:mr-4 file:rounded file:border-0 file:bg-neutral-700 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white file:transition file:hover:bg-neutral-800 dark:file:bg-neutral-600 dark:file:hover:bg-neutral-500"
           />
           <p className="mt-1 text-xs text-neutral-500">{labels.materialsUploadHint ?? "Flyers, brochures, or designs. PDF, JPEG, PNG, WebP. Max 10MB each."}</p>
         </div>

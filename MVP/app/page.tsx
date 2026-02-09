@@ -23,6 +23,9 @@ export default async function Home() {
         <p className="mt-4 max-w-xl text-lg text-neutral-600 dark:text-neutral-400">
           {t("home.tagline")}
         </p>
+        <p className="mt-3 max-w-xl text-sm text-neutral-500 dark:text-neutral-500">
+          {t("home.intro")}
+        </p>
         <Link
           href="/login"
           className="mt-8 inline-flex rounded-xl bg-primary-btn px-6 py-3 text-base font-medium text-white shadow-card transition hover:bg-primary-btn-hover dark:text-neutral-900 dark:hover:bg-primary-btn-hover"

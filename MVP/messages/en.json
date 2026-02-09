@@ -32,6 +32,7 @@
   "home": {
     "welcome": "Welcome to HivePost",
     "tagline": "Simple marketing content for your local business.",
+    "intro": "Enter your business details and get auto-generated strategy, platform-ready post copy, and images. Supports Xiaohongshu, WeChat Moments, and more—ideal for local shops, salons, and service businesses.",
     "cta": "Log in to get started"
   },
   "login": {

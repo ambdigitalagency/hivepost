@@ -1,6 +1,6 @@
 /**
- * 图片生成 — 候选图用 Replicate（成本优先）
- * 低质量：小图/快模型；高质量最终化在 6.2 再细化。
+ * 图片生成 — Replicate，照片级效果（RealVisXL）。
+ * 候选图：文生图；最终图：基于候选图 img2img 增强。
  */
 
 /** 单次生成返回图片 URL（Replicate 常见返回） */
@@ -35,17 +35,15 @@ export async function generateOneCandidateImage(prompt: string): Promise<ImageGe
   try {
     const Replicate = (await import("replicate")).default;
     const replicate = new Replicate({ auth: token });
-    const output = await replicate.run(
-      "stability-ai/sdxl:7762fd07cf82c948538e41f63f77d685e02b063e37e496e96eefd46c929f9bdc",
-      {
-        input: {
-          prompt: prompt.slice(0, 1000),
-          num_outputs: 1,
-          width: 512,
-          height: 512,
-        },
-      }
-    );
+    const output = await replicate.run("adirik/realvisxl-v4.0", {
+      input: {
+        prompt: prompt.slice(0, 1000),
+        negative_prompt: "blurry, low quality, distorted, cartoon, illustration",
+        num_outputs: 1,
+        width: 512,
+        height: 512,
+      },
+    });
     const urlStr = extractUrl(output);
     if (urlStr) return { url: urlStr };
     return { url: "", error: "No image URL in response" };
@@ -76,19 +74,17 @@ export async function generateOneFinalImageFromCandidate(
   try {
     const Replicate = (await import("replicate")).default;
     const replicate = new Replicate({ auth: token });
-    const output = await replicate.run(
-      "stability-ai/sdxl:7762fd07cf82c948538e41f63f77d685e02b063e37e496e96eefd46c929f9bdc",
-      {
-        input: {
-          image: candidateImageUrl,
-          prompt: prompt.slice(0, 1000),
-          prompt_strength: 0.35,
-          num_outputs: 1,
-          width: 1024,
-          height: 1024,
-        },
-      }
-    );
+    const output = await replicate.run("adirik/realvisxl-v4.0", {
+      input: {
+        image: candidateImageUrl,
+        prompt: prompt.slice(0, 1000),
+        negative_prompt: "blurry, low quality, distorted, cartoon, illustration",
+        prompt_strength: 0.35,
+        num_outputs: 1,
+        width: 1024,
+        height: 1024,
+      },
+    });
     const urlStr = extractUrl(output);
     if (urlStr) return { url: urlStr };
     return { url: "", error: "No image URL in response" };

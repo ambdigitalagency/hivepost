@@ -162,7 +162,8 @@ export async function POST(
       { status: 429 }
     );
   }
-  const count = Math.min(budget.candidateCount, 20);
+  // TODO: revert after testing — restore: Math.min(budget.candidateCount, 20)
+  const count = 5;
 
   const batchId = randomUUID();
   const { error: batchErr } = await supabaseAdmin.from("image_batches").insert({
