@@ -1,5 +1,5 @@
 /**
- * 图片生成 — Replicate，照片级效果（RealVisXL）。
+ * 图片生成 — Replicate，FLUX 2 Dev（高真实度、纹理与光照）。
  * 候选图：文生图；最终图：基于候选图 img2img 增强。
  */
 
@@ -35,13 +35,11 @@ export async function generateOneCandidateImage(prompt: string): Promise<ImageGe
   try {
     const Replicate = (await import("replicate")).default;
     const replicate = new Replicate({ auth: token });
-    const output = await replicate.run("adirik/realvisxl-v4.0", {
+    const output = await replicate.run("black-forest-labs/flux-2-dev", {
       input: {
         prompt: prompt.slice(0, 1000),
-        negative_prompt: "blurry, low quality, distorted, cartoon, illustration",
-        num_outputs: 1,
-        width: 512,
-        height: 512,
+        aspect_ratio: "1:1",
+        go_fast: true,
       },
     });
     const urlStr = extractUrl(output);
@@ -74,15 +72,12 @@ export async function generateOneFinalImageFromCandidate(
   try {
     const Replicate = (await import("replicate")).default;
     const replicate = new Replicate({ auth: token });
-    const output = await replicate.run("adirik/realvisxl-v4.0", {
+    const output = await replicate.run("black-forest-labs/flux-2-dev", {
       input: {
-        image: candidateImageUrl,
         prompt: prompt.slice(0, 1000),
-        negative_prompt: "blurry, low quality, distorted, cartoon, illustration",
-        prompt_strength: 0.35,
-        num_outputs: 1,
-        width: 1024,
-        height: 1024,
+        input_images: [candidateImageUrl],
+        aspect_ratio: "1:1",
+        go_fast: true,
       },
     });
     const urlStr = extractUrl(output);

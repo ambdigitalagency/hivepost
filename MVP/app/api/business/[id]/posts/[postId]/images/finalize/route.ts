@@ -136,6 +136,9 @@ export async function POST(
     purpose: "finalize",
     hasReferenceMaterials,
   });
+  const finalizeInstruction =
+    "Do not change the composition, subjects, or layout of the image. Only enhance resolution, sharpness, and overall image quality. The output must look like a higher-resolution, clearer version of the same photo.";
+  const promptForModel = `${finalizeInstruction} Visual style: ${imagePrompt}`;
 
   const costPerImage = estimateFinalImageCostUsd();
   const REPLICATE_DELAY_MS = 11000;
@@ -162,10 +165,10 @@ export async function POST(
           write({ type: "error", index: idx });
           continue;
         }
-    let gen = await generateOneFinalImageFromCandidate(candidateUrl, imagePrompt);
+    let gen = await generateOneFinalImageFromCandidate(candidateUrl, promptForModel);
     for (let retry = 0; retry < 2 && (gen.error || !gen.url); retry++) {
       await new Promise((r) => setTimeout(r, 2000));
-      gen = await generateOneFinalImageFromCandidate(candidateUrl, imagePrompt);
+      gen = await generateOneFinalImageFromCandidate(candidateUrl, promptForModel);
     }
         if (gen.error || !gen.url) {
           console.warn("Final image gen failed after retries", gen.error);
@@ -199,39 +202,39 @@ export async function POST(
         }
       }
     }
-        if (!fetchOk) continue;
-        const imageId = randomUUID();
+    if (!fetchOk) continue;
+    const imageId = randomUUID();
     const path = `posts/${postId}/batches/${batchId}/final-${imageId}.png`;
     const { storageKey, error: uploadErr } = await uploadPostImage(path, buffer, "image/png");
-        if (uploadErr || !storageKey) {
-          console.warn("Final upload failed", uploadErr);
-          failedCount.push(idx + 1);
-          write({ type: "error", index: idx });
-          continue;
-        }
-        await supabaseAdmin.from("post_images").insert({
+    if (uploadErr || !storageKey) {
+      console.warn("Final upload failed", uploadErr);
+      failedCount.push(idx + 1);
+      write({ type: "error", index: idx });
+      continue;
+    }
+    await supabaseAdmin.from("post_images").insert({
       post_id: postId,
       batch_id: batchId,
       stage: "final_high",
       storage_key: storageKey,
       selected: true,
       source_candidate_id: candidateId,
-        });
-        finalized.push(storageKey);
-        const finalUrl = getPublicUrl(storageKey);
-        write({ type: "image", index: idx, url: finalUrl });
-            await recordCost({
-          ownerType: "user",
-          ownerId: userId,
-          provider: "replicate",
-          kind: "image",
-          model: "sdxl",
-          units: 1,
-          costUsdEstimated: costPerImage,
-        });
-      }
+    });
+    finalized.push(storageKey);
+    const finalUrl = getPublicUrl(storageKey);
+    write({ type: "image", index: idx, url: finalUrl });
+    await recordCost({
+      ownerType: "user",
+      ownerId: userId,
+      provider: "replicate",
+      kind: "image",
+      model: "sdxl",
+      units: 1,
+      costUsdEstimated: costPerImage,
+    });
+  }
 
-          await supabaseAdmin
+      await supabaseAdmin
         .from("image_batches")
         .update({ status: "succeeded", completed_at: new Date().toISOString() })
         .eq("id", batchId);
