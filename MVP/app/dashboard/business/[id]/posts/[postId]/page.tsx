@@ -178,6 +178,8 @@ export default async function PostPage({
           captionCopied: t("post.captionCopied"),
           downloadImages: t("post.downloadImages"),
           downloadImagesHint: t("post.downloadImagesHint"),
+          downloadAll: t("post.downloadAll"),
+          selectAll: t("post.selectAll"),
           markAsUsed: t("post.markAsUsed"),
           firstUseMessage: t("post.firstUseMessage"),
         }}

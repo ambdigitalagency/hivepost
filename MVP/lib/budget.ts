@@ -83,7 +83,7 @@ export async function getFinalizeMaxCount(): Promise<number> {
   const spendUsd = await getMonthlySpendUsd();
   if (spendUsd >= MONTHLY_CAP_USD) return 0;
   const remaining = MONTHLY_CAP_USD - spendUsd;
-  if (remaining >= 10) return 9;
+  if (remaining >= 10) return 10;
   if (remaining >= 5) return 6;
   return 3;
 }

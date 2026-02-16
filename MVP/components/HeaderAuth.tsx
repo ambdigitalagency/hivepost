@@ -39,9 +39,9 @@ export function HeaderAuth() {
   return (
     <Link
       href="/login"
-      className="rounded-xl bg-primary-btn px-4 py-2 text-sm font-medium text-white transition hover:bg-primary-btn-hover dark:text-neutral-900 dark:hover:bg-primary-btn-hover"
+      className="text-sm font-medium text-foreground transition hover:text-neutral-600 dark:hover:text-neutral-300"
     >
-      {t("nav.login")}
+      {t("nav.getStarted")}
     </Link>
   );
 }

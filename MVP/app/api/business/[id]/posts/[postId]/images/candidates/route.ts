@@ -10,6 +10,7 @@ import { getOrCreateUser } from "@/lib/db-user";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { recordEvent } from "@/lib/events";
 import { checkBudgetForCandidates, checkBudgetForNewBatch, recordCost } from "@/lib/budget";
+import { canUserGenerate } from "@/lib/trial";
 import { uploadPostImage } from "@/lib/storage";
 import {
   generateOneCandidateImage,
@@ -69,6 +70,15 @@ export async function POST(
     return NextResponse.json(
       { error: "Post not found", debug: { receivedBusinessId: bid, receivedPostId: pid, pathname, paramsReceived: resolvedParams } },
       { status: 404 }
+    );
+  }
+
+  const trial = await canUserGenerate(userId);
+  if (!trial.allowed) {
+    await recordEvent({ ownerType: "user", ownerId: userId }, "trial_blocked", { reason: trial.reason });
+    return NextResponse.json(
+      { error: trial.reason ?? "trial_expired", message: "Trial ended. Upgrade to continue." },
+      { status: 403 }
     );
   }
 

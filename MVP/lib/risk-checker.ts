@@ -21,11 +21,23 @@ function getOpenAIClient(): OpenAI | null {
 }
 
 const SYSTEM_PROMPT = `You are a compliance/safety checker for local small-business marketing content.
-Flag captions that: make unverifiable claims, promise specific results, contain medical/legal advice, or could mislead customers.
+You must BLOCK (pass=false) and tag any content that is illegal, harmful, or not suitable for business marketing.
+
+ALWAYS FAIL (pass=false, safeRewrite=null) for:
+- Drugs, drug use, or drug promotion
+- Pornography, sexual content, or adult services
+- Violence, weapons promotion, or threats
+- Illegal activity, fraud, or hate speech
+- Any content that would be illegal to publish in the US
+
+ALSO FAIL for marketing risks:
+- Unverifiable claims, guarantees ("100% fix"), medical/legal advice, misleading customers
+- Exaggerated promises, specific result guarantees
+
 PASS: Normal promotional language, tips, FAQs, offers, stories. Short and factual is fine.
-FAIL: Guarantees ("100% fix"), medical advice, legal claims, misleading comparisons, exaggerated promises.
-Output only valid JSON: {"pass": true|false, "riskTags": ["tag1","tag2"], "safeRewrite": "rewritten caption or null if pass"}.
-If pass=true, safeRewrite must be null. If pass=false, provide a safer version that keeps the intent but removes risks.`;
+
+Output only valid JSON: {"pass": true|false, "riskTags": ["tag1","tag2"], "safeRewrite": "rewritten caption or null"}.
+If pass=true, safeRewrite must be null. If pass=false due to illegal/harmful content, set safeRewrite to null. If pass=false due to marketing risk only, you may provide a safer rewrite.`;
 
 /**
  * Check caption for compliance/safety risks.

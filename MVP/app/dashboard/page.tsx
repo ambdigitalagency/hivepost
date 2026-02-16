@@ -6,9 +6,11 @@ import { cookies } from "next/headers";
 import type { Locale } from "@/lib/i18n";
 import Link from "next/link";
 import { getMyBusinesses } from "@/lib/db-business";
+import { getCurrentAppUserId } from "@/lib/db-user";
 import { redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { getQuotaSummary, daysUntilReset } from "@/lib/quota";
+import { getTrialStatus } from "@/lib/trial";
 import { PLATFORM_LABELS } from "@/lib/platforms";
 import { PlusIcon } from "@/components/PlusIcon";
 import { DocumentIcon } from "@/components/DocumentIcon";
@@ -36,6 +38,9 @@ export default async function DashboardPage() {
   const businesses = await getMyBusinesses();
   const hasBusiness = businesses && businesses.length > 0;
   const first = hasBusiness ? businesses[0]! : null;
+
+  const userId = await getCurrentAppUserId(session);
+  const trialStatus = userId ? await getTrialStatus(userId) : null;
 
   let platformQuotas: { platform: string; platformLabel: string; used: number; limit: number }[] = [];
   let recentDrafts: { id: string; platform: string; platformLabel: string }[] = [];
@@ -71,6 +76,23 @@ export default async function DashboardPage() {
   if (!hasBusiness) {
     return (
       <div className="mx-auto max-w-2xl">
+        {trialStatus && (
+          <div className="mb-6 rounded-xl border border-card-border bg-card-bg p-6 shadow-card">
+            <h2 className="text-lg font-semibold text-foreground">{t("dashboard.trialTitle")}</h2>
+            {trialStatus.subscriptionActive ? (
+              <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">{t("dashboard.subscribed")}</p>
+            ) : trialStatus.reason === "trial_expired" ? (
+              <div className="mt-2">
+                <p className="text-sm font-medium text-amber-700 dark:text-amber-400">{t("dashboard.trialEnded")}</p>
+                <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">{t("dashboard.upgradeToContinue")}</p>
+              </div>
+            ) : trialStatus.daysLeft != null ? (
+              <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
+                {interpolate(t("dashboard.trialDaysLeft"), { n: trialStatus.daysLeft })}
+              </p>
+            ) : null}
+          </div>
+        )}
         <div className="rounded-xl border border-card-border bg-card-bg p-6 shadow-card">
           <h2 className="text-lg font-semibold text-foreground">{t("dashboard.quickActions")}</h2>
           <div className="mt-4 flex flex-col gap-4 sm:flex-row">
@@ -153,6 +175,29 @@ export default async function DashboardPage() {
         </div>
 
         <div className="space-y-6">
+          {trialStatus && (
+            <div className="rounded-xl border border-card-border bg-card-bg p-6 shadow-card">
+              <h2 className="text-lg font-semibold text-foreground">{t("dashboard.trialTitle")}</h2>
+              {trialStatus.subscriptionActive ? (
+                <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
+                  {t("dashboard.subscribed")}
+                  {trialStatus.daysLeft != null && trialStatus.daysLeft > 0 && (
+                    <span className="ml-1">({interpolate(t("dashboard.trialDaysLeft"), { n: trialStatus.daysLeft })})</span>
+                  )}
+                </p>
+              ) : trialStatus.reason === "trial_expired" ? (
+                <div className="mt-2">
+                  <p className="text-sm font-medium text-amber-700 dark:text-amber-400">{t("dashboard.trialEnded")}</p>
+                  <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">{t("dashboard.upgradeToContinue")}</p>
+                </div>
+              ) : trialStatus.daysLeft != null ? (
+                <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
+                  {interpolate(t("dashboard.trialDaysLeft"), { n: trialStatus.daysLeft })}
+                </p>
+              ) : null}
+            </div>
+          )}
+
           <div className="rounded-xl border border-card-border bg-card-bg p-6 shadow-card">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-foreground">{t("dashboard.thisWeeksQuota")}</h2>

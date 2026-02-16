@@ -6,6 +6,7 @@
   },
   "nav": {
     "login": "Log in",
+    "getStarted": "Get started",
     "logout": "Log out",
     "loggedInAs": "Logged in as",
     "dashboard": "Dashboard",
@@ -23,6 +24,11 @@
     "thisWeeksQuota": "This week's quota",
     "resetsInDays": "Resets in {{n}} days",
     "left": "{{used}}/{{limit}} left",
+    "trialTitle": "Your plan",
+    "trialDaysLeft": "{{n}} days left in free trial",
+    "trialEnded": "Trial ended",
+    "upgradeToContinue": "Upgrade to continue creating content. Coming soon.",
+    "subscribed": "Subscribed",
     "needHelp": "Need help?",
     "rule1": "Each platform: 2 posts/week max",
     "rule2": "You approve all content",
@@ -31,9 +37,15 @@
   },
   "home": {
     "welcome": "Welcome to HivePost",
-    "tagline": "Simple marketing content for your local business.",
-    "intro": "Enter your business details and get auto-generated strategy, platform-ready post copy, and images. Supports Xiaohongshu, WeChat Moments, and more—ideal for local shops, salons, and service businesses.",
-    "cta": "Log in to get started"
+    "pill": "Built for local service pros",
+    "headline1": "Turn your conversations into",
+    "headline2": "ready-to-post content",
+    "tagline": "Paste your customer chats, get polished captions and images. You approve everything before it goes live.",
+    "cta": "Start creating for free",
+    "trust1": "You approve everything",
+    "trust2": "5 minutes to your first post",
+    "trust3": "No marketing skills needed",
+    "intro": "Enter your business details and get auto-generated strategy, platform-ready post copy, and images. Supports Xiaohongshu, WeChat Moments, and more—ideal for local shops, salons, and service businesses."
   },
   "login": {
     "title": "Log in",
@@ -42,6 +54,8 @@
   },
   "business": {
     "create": "Create business",
+    "stepLabel": "Step {{current}} of {{total}}",
+    "complete": "complete",
     "tellUs": "Tell us about your business",
     "tellUsHint": "This helps us generate content that fits your industry and audience.",
     "nextStepGenerateStrategy": "Next: Generate strategy",
@@ -130,6 +144,8 @@
     "captionCopied": "Copied.",
     "downloadImages": "Download images",
     "downloadImagesHint": "Open each image above in a new tab, then right‑click to save.",
+    "downloadAll": "Download all as ZIP",
+    "selectAll": "Select all",
     "markAsUsed": "Mark as used",
     "firstUseMessage": "Thanks! We'll ask for your feedback in about 2 weeks."
   },

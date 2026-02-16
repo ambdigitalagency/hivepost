@@ -16,7 +16,10 @@ export function AppHeader({ dashboardNav, businessId }: AppHeaderProps) {
 
   return (
     <header className="flex w-full items-center justify-between border-b border-card-border bg-card-bg px-6 py-4 sm:px-8">
-      <Link href="/" className="text-lg font-semibold text-foreground">
+      <Link href="/" className="flex items-center gap-2.5 text-lg font-semibold text-foreground">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--accent-orange)] text-white">
+          <HivePostLogoIcon className="h-5 w-5" />
+        </span>
         HivePost
       </Link>
       <nav className="flex items-center gap-6">
@@ -42,6 +45,15 @@ export function AppHeader({ dashboardNav, businessId }: AppHeaderProps) {
         <HeaderAuth />
       </nav>
     </header>
+  );
+}
+
+function HivePostLogoIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2L2 7l10 5 10-5-10-5z" />
+      <path d="M2 17l10 5 10-5" />
+    </svg>
   );
 }
 

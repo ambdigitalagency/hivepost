@@ -2,7 +2,8 @@
 
 ## 当前状态
 
-- 项目已初始化 Git（在 `Content Generation Tool` 根目录）
+- 项目根目录：`/Users/michael/Desktop/HivePost`（Git、Brief、Design、MVP）
+- 应用与数据库相关文件均在 **MVP** 子目录：`/Users/michael/Desktop/HivePost/MVP`
 - Vercel 新项目页面已打开
 - GitHub 授权页面已打开（需您手动点击 **Authorize Vercel**）
 
@@ -18,10 +19,10 @@
 
 ### 步骤 2：创建 GitHub 仓库并推送代码
 
-在终端执行（在项目根目录 `Content Generation Tool` 下）：
+在终端执行（在项目根目录 **HivePost** 下）：
 
 ```bash
-cd /Users/michael/Desktop/Temp/Content\ Generation\ Tool
+cd /Users/michael/Desktop/HivePost
 
 # 1. 在 GitHub 上创建新仓库：https://github.com/new
 #    仓库名建议：hivepost 或 content-generation-tool

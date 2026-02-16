@@ -16,6 +16,7 @@ import { generateCaption } from "@/lib/copywriter";
 import { checkCaption } from "@/lib/risk-checker";
 import { checkGatekeeper } from "@/lib/gatekeeper";
 import { checkPostQuota, incrementPostQuota } from "@/lib/quota";
+import { canUserGenerate } from "@/lib/trial";
 
 async function getAppUserId(session: { user: { id?: string; email?: string | null; name?: string | null } } | null) {
   if (!session?.user?.id) return null;
@@ -52,6 +53,15 @@ export async function POST(
     .eq("business_id", businessId)
     .single();
   if (!post) return NextResponse.json({ error: "Post not found" }, { status: 404 });
+
+  const trial = await canUserGenerate(userId);
+  if (!trial.allowed) {
+    await recordEvent({ ownerType: "user", ownerId: userId }, "trial_blocked", { reason: trial.reason });
+    return NextResponse.json(
+      { error: trial.reason ?? "trial_expired", message: "Trial ended. Upgrade to continue." },
+      { status: 403 }
+    );
+  }
 
   if (post.status !== "planned") {
     return NextResponse.json(

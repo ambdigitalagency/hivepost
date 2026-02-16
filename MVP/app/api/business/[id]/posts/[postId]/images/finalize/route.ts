@@ -1,5 +1,5 @@
 /**
- * Phase 6.2: 最终化选中的候选图（最多 9 张），生成高质量版并写回存储与 DB。
+ * Phase 6.2: 最终化选中的候选图（最多 10 张），生成高质量版并写回存储与 DB。
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -9,6 +9,7 @@ import { getOrCreateUser } from "@/lib/db-user";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { recordEvent } from "@/lib/events";
 import { checkBudgetForFinalize, recordCost } from "@/lib/budget";
+import { canUserGenerate } from "@/lib/trial";
 import { uploadPostImage } from "@/lib/storage";
 import {
   generateOneFinalImageFromCandidate,
@@ -18,7 +19,7 @@ import { captionToImagePrompt } from "@/lib/image-prompt-generator";
 import { getPublicUrl } from "@/lib/storage";
 import { randomUUID } from "crypto";
 
-const ABSOLUTE_MAX_FINAL = 9;
+const ABSOLUTE_MAX_FINAL = 10;
 
 async function getAppUserId(session: {
   user?: { id?: string; email?: string | null; name?: string | null };
@@ -41,6 +42,15 @@ export async function POST(
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id: businessId, postId } = await params;
+
+  const trial = await canUserGenerate(userId);
+  if (!trial.allowed) {
+    await recordEvent({ ownerType: "user", ownerId: userId }, "trial_blocked", { reason: trial.reason });
+    return NextResponse.json(
+      { error: trial.reason ?? "trial_expired", message: "Trial ended. Upgrade to continue." },
+      { status: 403 }
+    );
+  }
 
   const body = await req.json().catch(() => ({}));
   const selectedImageIds: string[] = Array.isArray(body.selectedImageIds)

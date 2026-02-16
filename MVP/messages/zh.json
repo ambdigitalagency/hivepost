@@ -6,6 +6,7 @@
   },
   "nav": {
     "login": "登录",
+    "getStarted": "开始使用",
     "logout": "退出登录",
     "loggedInAs": "已登录：",
     "dashboard": "工作台",
@@ -23,6 +24,11 @@
     "thisWeeksQuota": "本周配额",
     "resetsInDays": "{{n}} 天后重置",
     "left": "剩余 {{used}}/{{limit}}",
+    "trialTitle": "您的方案",
+    "trialDaysLeft": "免费试用剩余 {{n}} 天",
+    "trialEnded": "试用已结束",
+    "upgradeToContinue": "升级以继续创作内容。即将开放。",
+    "subscribed": "已订阅",
     "needHelp": "需要帮助？",
     "rule1": "每平台每周最多 2 条",
     "rule2": "您审批所有内容",
@@ -31,9 +37,15 @@
   },
   "home": {
     "welcome": "欢迎使用 HivePost",
-    "tagline": "为本地小生意准备的简单营销内容。",
-    "intro": "填写业务信息后，可自动生成营销策略、按平台撰写帖子文案，并生成配图。支持小红书、微信朋友圈等平台，适合餐厅、美容、维修等本地商家。",
-    "cta": "登录开始使用"
+    "pill": "为本地服务从业者打造",
+    "headline1": "把对话变成",
+    "headline2": "可直接发布的内容",
+    "tagline": "粘贴客户对话，获得精修文案与配图。发布前由您把关。",
+    "cta": "免费开始创作",
+    "trust1": "您审批所有内容",
+    "trust2": "5 分钟产出第一条帖子",
+    "trust3": "无需营销经验",
+    "intro": "填写业务信息后，可自动生成营销策略、按平台撰写帖子文案，并生成配图。支持小红书、微信朋友圈等平台，适合餐厅、美容、维修等本地商家。"
   },
   "login": {
     "title": "登录",
@@ -42,6 +54,8 @@
   },
   "business": {
     "create": "创建业务",
+    "stepLabel": "第 {{current}} 步，共 {{total}} 步",
+    "complete": "完成",
     "tellUs": "告诉我们你的业务",
     "tellUsHint": "便于我们生成符合您行业和受众的内容。",
     "nextStepGenerateStrategy": "下一步，生成策略",
@@ -130,6 +144,8 @@
     "captionCopied": "已复制。",
     "downloadImages": "下载图片",
     "downloadImagesHint": "点击上方图片在新标签页打开，右键保存即可。",
+    "downloadAll": "全部下载为 ZIP",
+    "selectAll": "全选",
     "markAsUsed": "标记已使用",
     "firstUseMessage": "感谢使用！约 2 周后我们会再请您填写反馈。"
   },

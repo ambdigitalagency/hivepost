@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import JSZip from "jszip";
 
 type CandidateImage = { id: string; url: string };
 
@@ -40,6 +41,8 @@ type PostDetailClientProps = {
     captionCopied: string;
     downloadImages: string;
     downloadImagesHint: string;
+    downloadAll: string;
+    selectAll: string;
     markAsUsed: string;
     firstUseMessage: string;
   };
@@ -237,6 +240,37 @@ export function PostDetailClient({
     }
   }
 
+  function handleSelectAll() {
+    const allIds: string[] = [];
+    candidateImages.forEach((img) => allIds.push(img.id));
+    streamingSlots?.forEach((slot) => slot && allIds.push(slot.id));
+    const toSelect = allIds.slice(0, maxFinalCount);
+    setSelectedIds(new Set(toSelect));
+  }
+
+  async function handleDownloadAll() {
+    if (finalImages.length === 0) return;
+    try {
+      const zip = new JSZip();
+      await Promise.all(
+        finalImages.map(async (img, i) => {
+          const res = await fetch(img.url);
+          const blob = await res.blob();
+          zip.file(`image-${i + 1}.png`, blob);
+        })
+      );
+      const blob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `hivepost-images-${postId.slice(0, 8)}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError("Download failed");
+    }
+  }
+
   async function handleFinalize() {
     if (selectedIds.size === 0) return;
     const ids = Array.from(selectedIds);
@@ -417,9 +451,18 @@ export function PostDetailClient({
           )}
           {(hasCandidates || streamingSlots) && (
             <>
-              <p className="mb-1 text-sm text-neutral-600 dark:text-neutral-400">
-                {labels.candidateGallery} · {labels.selectUpToN}
-              </p>
+              <div className="mb-1 flex flex-wrap items-center gap-2">
+                <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                  {labels.candidateGallery} · {labels.selectUpToN}
+                </p>
+                <button
+                  type="button"
+                  onClick={handleSelectAll}
+                  className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+                >
+                  {labels.selectAll}
+                </button>
+              </div>
               <p className="mb-3 text-sm text-neutral-500">{labels.candidateImagesHint}</p>
               {streamingSlots && !finalizingSlots && (
                 <p className="mb-3 text-sm text-neutral-500">
@@ -594,6 +637,13 @@ export function PostDetailClient({
               className={btnSecondary}
             >
               {copied ? labels.captionCopied : labels.copyCaption}
+            </button>
+            <button
+              type="button"
+              onClick={handleDownloadAll}
+              className={btnSecondary}
+            >
+              {labels.downloadAll}
             </button>
             <span className="text-sm text-neutral-500">
               {labels.downloadImagesHint}
