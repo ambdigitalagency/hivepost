@@ -20,35 +20,49 @@ export type TrialStatus = {
  * 在首次登录（getOrCreateUser 拿到已有用户）或首次创建业务时调用。
  */
 export async function ensureTrialStarted(userId: string): Promise<void> {
-  const end = new Date();
-  end.setDate(end.getDate() + TRIAL_DAYS);
-  await supabaseAdmin
-    .from("users")
-    .update({ trial_ends_at: end.toISOString() })
-    .eq("id", userId)
-    .is("trial_ends_at", null);
+  try {
+    const end = new Date();
+    end.setDate(end.getDate() + TRIAL_DAYS);
+    await supabaseAdmin
+      .from("users")
+      .update({ trial_ends_at: end.toISOString() })
+      .eq("id", userId)
+      .is("trial_ends_at", null);
+  } catch (err) {
+    if (isSchemaError(err)) return;
+    throw err;
+  }
+}
+
+/** 是否为「列/表不存在」等 schema 错误（未跑 005 迁移时会出现） */
+function isSchemaError(err: unknown): boolean {
+  const code = (err as { code?: string })?.code;
+  const msg = String((err as { message?: string })?.message ?? "");
+  return code === "42703" || code === "42P01" || msg.includes("does not exist") || msg.includes("column");
 }
 
 /**
  * 检查用户是否在试用期内或有有效订阅；若不允许则返回原因。
+ * 若数据库未执行 005 迁移（缺 trial_ends_at / subscriptions），返回允许访问的默认状态，避免白屏。
  */
 export async function getTrialStatus(userId: string): Promise<TrialStatus> {
-  const { data: user } = await supabaseAdmin
-    .from("users")
-    .select("trial_ends_at")
-    .eq("id", userId)
-    .single();
+  try {
+    const { data: user } = await supabaseAdmin
+      .from("users")
+      .select("trial_ends_at")
+      .eq("id", userId)
+      .single();
 
-  const trialEndsAt = user?.trial_ends_at ?? null;
+    const trialEndsAt = user?.trial_ends_at ?? null;
 
-  const { data: sub } = await supabaseAdmin
-    .from("subscriptions")
-    .select("id, current_period_end")
-    .eq("user_id", userId)
-    .in("status", ["trial", "active", "past_due"])
-    .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    const { data: sub } = await supabaseAdmin
+      .from("subscriptions")
+      .select("id, current_period_end")
+      .eq("user_id", userId)
+      .in("status", ["trial", "active", "past_due"])
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
   const subscriptionActive = !!sub && (sub.current_period_end ? new Date(sub.current_period_end) > new Date() : true);
 
@@ -94,6 +108,18 @@ export async function getTrialStatus(userId: string): Promise<TrialStatus> {
     subscriptionActive: false,
     daysLeft,
   };
+  } catch (err) {
+    if (isSchemaError(err)) {
+      return {
+        allowed: true,
+        trialEndsAt: null,
+        subscriptionActive: false,
+        daysLeft: null,
+        reason: "no_trial",
+      };
+    }
+    throw err;
+  }
 }
 
 /**
