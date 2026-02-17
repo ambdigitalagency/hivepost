@@ -23,6 +23,7 @@ type PostDetailClientProps = {
     editCaption: string;
     generateImages: string;
     imageGenerationTimeHint: string;
+    imageGenerationBetaHint: string;
     candidateImagesHint: string;
     placeholder: string;
     quotaExceeded: string;
@@ -74,6 +75,7 @@ export function PostDetailClient({
   const [streamingEstimatedMinutes, setStreamingEstimatedMinutes] = useState<number | null>(null);
   const [finalizingSlots, setFinalizingSlots] = useState<(null | { url: string })[] | null>(null);
   const [finalizingOrder, setFinalizingOrder] = useState<string[]>([]);
+  const [markingUsed, setMarkingUsed] = useState(false);
   const candidatesAbortRef = useRef<AbortController | null>(null);
   const hasAutoTriggeredCaption = useRef(false);
 
@@ -223,6 +225,8 @@ export function PostDetailClient({
   }
 
   async function handleMarkUsed() {
+    setError(null);
+    setMarkingUsed(true);
     try {
       const res = await fetch(
         `/api/business/${businessId}/posts/${postId}/mark-used`,
@@ -230,13 +234,16 @@ export function PostDetailClient({
       );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.message ?? data.error ?? "Request failed");
+        const msg = data.message ?? data.error ?? "Request failed";
+        setError(msg);
         return;
       }
       if (data.firstTimeUse) setShowFirstUseMessage(true);
       router.refresh();
     } catch {
       setError("Network error");
+    } finally {
+      setMarkingUsed(false);
     }
   }
 
@@ -338,6 +345,8 @@ export function PostDetailClient({
           } else if (ev.type === "done") {
             if (ev.error) setError(ev.error);
             router.refresh();
+            setFinalizingSlots(null);
+            setFinalizingOrder([]);
           }
         } catch {
           /* ignore */
@@ -354,11 +363,10 @@ export function PostDetailClient({
       if (buffer.trim()) processLine(buffer);
     } catch {
       setError("Network error");
-    } finally {
-      setFinalizing(false);
       setFinalizingSlots(null);
       setFinalizingOrder([]);
-      setStreamingSlots(null);
+    } finally {
+      setFinalizing(false);
     }
   }
 
@@ -422,9 +430,10 @@ export function PostDetailClient({
         <p className="text-sm text-neutral-500">{labels.placeholder}</p>
       )}
 
-      {showCandidateArea && (
+          {showCandidateArea && (
         <div className="rounded-xl border border-card-border bg-card-bg p-4 shadow-card">
           <h2 className="mb-2 text-sm font-medium text-foreground">{labels.generateImages}</h2>
+          <p className="mb-3 text-xs text-neutral-500">{labels.imageGenerationBetaHint}</p>
           {!hasCandidates && !hasFinals && !streamingSlots && (
             <>
               <button
@@ -487,7 +496,7 @@ export function PostDetailClient({
                           alt=""
                           fill
                           sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw"
-                          className="object-cover"
+                          className="object-cover transition-opacity duration-500"
                         />
                       </div>
                     ) : (
@@ -652,9 +661,10 @@ export function PostDetailClient({
               <button
                 type="button"
                 onClick={handleMarkUsed}
-                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
+                disabled={markingUsed}
+                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:opacity-50"
               >
-                {labels.markAsUsed}
+                {markingUsed ? "…" : labels.markAsUsed}
               </button>
             )}
           </div>

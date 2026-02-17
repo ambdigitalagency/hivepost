@@ -5,7 +5,7 @@
 
 import { supabaseAdmin } from "./supabase-server";
 
-const TRIAL_DAYS = 30;
+const TRIAL_DAYS = 28;
 
 export type TrialStatus = {
   allowed: boolean;
@@ -16,7 +16,7 @@ export type TrialStatus = {
 };
 
 /**
- * 若 trial_ends_at 为 NULL，设为当前 + 30 天（仅写一次）。
+ * 若 trial_ends_at 为 NULL，设为当前 + 28 天（仅写一次）。
  * 在首次登录（getOrCreateUser 拿到已有用户）或首次创建业务时调用。
  */
 export async function ensureTrialStarted(userId: string): Promise<void> {
@@ -80,7 +80,7 @@ export async function getTrialStatus(userId: string): Promise<TrialStatus> {
 
   if (!trialEndsAt) {
     return {
-      allowed: true,
+      allowed: false,
       trialEndsAt: null,
       subscriptionActive: false,
       daysLeft: null,

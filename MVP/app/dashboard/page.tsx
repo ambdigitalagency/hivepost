@@ -14,6 +14,7 @@ import { getTrialStatus } from "@/lib/trial";
 import { PLATFORM_LABELS } from "@/lib/platforms";
 import { PlusIcon } from "@/components/PlusIcon";
 import { DocumentIcon } from "@/components/DocumentIcon";
+import { BindCardButton } from "@/components/BindCardButton";
 
 export const dynamic = "force-dynamic";
 
@@ -81,6 +82,13 @@ export default async function DashboardPage() {
             <h2 className="text-lg font-semibold text-foreground">{t("dashboard.trialTitle")}</h2>
             {trialStatus.subscriptionActive ? (
               <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">{t("dashboard.subscribed")}</p>
+            ) : trialStatus.reason === "no_trial" ? (
+              <div className="mt-2">
+                <p className="text-sm text-neutral-600 dark:text-neutral-400">{t("dashboard.bindCardHint")}</p>
+                <div className="mt-3">
+                  <BindCardButton label={t("dashboard.bindCardToStartTrial")} loadingLabel="…" />
+                </div>
+              </div>
             ) : trialStatus.reason === "trial_expired" ? (
               <div className="mt-2">
                 <p className="text-sm font-medium text-amber-700 dark:text-amber-400">{t("dashboard.trialEnded")}</p>
@@ -185,6 +193,13 @@ export default async function DashboardPage() {
                     <span className="ml-1">({interpolate(t("dashboard.trialDaysLeft"), { n: trialStatus.daysLeft })})</span>
                   )}
                 </p>
+              ) : trialStatus.reason === "no_trial" ? (
+                <div className="mt-2">
+                  <p className="text-sm text-neutral-600 dark:text-neutral-400">{t("dashboard.bindCardHint")}</p>
+                  <div className="mt-3">
+                    <BindCardButton label={t("dashboard.bindCardToStartTrial")} loadingLabel="…" />
+                  </div>
+                </div>
               ) : trialStatus.reason === "trial_expired" ? (
                 <div className="mt-2">
                   <p className="text-sm font-medium text-amber-700 dark:text-amber-400">{t("dashboard.trialEnded")}</p>

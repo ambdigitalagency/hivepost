@@ -1,13 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase-server";
-import { ensureTrialStarted } from "@/lib/trial";
 
 export type SessionUser = { id: string; email?: string | null; name?: string | null };
-
-function trialEndsAtDefault(): string {
-  const d = new Date();
-  d.setDate(d.getDate() + 30);
-  return d.toISOString();
-}
 
 /** 是否为「列不存在」等 schema 错误（生产未跑 005 迁移时会出现） */
 function isSchemaError(err: unknown): boolean {
@@ -18,8 +11,7 @@ function isSchemaError(err: unknown): boolean {
 
 /**
  * 根据 NextAuth session（Google sub）获取或创建本库 users 表记录，返回内部 user UUID。
- * 用于 API 中关联 businesses 等。
- * 新用户：设置 trial_ends_at = 30 天后。已有用户且 trial_ends_at 为 NULL 时（首次登录）也写入 30 天试用。
+ * 试用需先通过 Stripe 绑卡开启，不再在此处自动写入 trial_ends_at。
  * 若生产库未执行 005 迁移（无 trial_ends_at 列），会降级为仅查/插 id，避免白屏。
  */
 export async function getOrCreateUser(sessionUser: SessionUser | null): Promise<{ id: string } | null> {
@@ -42,18 +34,12 @@ export async function getOrCreateUser(sessionUser: SessionUser | null): Promise<
   }
   if (selectError && (selectError as { code?: string }).code !== "PGRST116") throw selectError;
 
-  if (existing) {
-    if (existing.trial_ends_at == null) {
-      await ensureTrialStarted(existing.id);
-    }
-    return { id: existing.id };
-  }
+  if (existing) return { id: existing.id };
 
   const insertPayload: Record<string, unknown> = {
     auth_provider_id: authProviderId,
     email: sessionUser.email ?? null,
     name: sessionUser.name ?? null,
-    trial_ends_at: trialEndsAtDefault(),
   };
 
   const { data: inserted, error } = await supabaseAdmin

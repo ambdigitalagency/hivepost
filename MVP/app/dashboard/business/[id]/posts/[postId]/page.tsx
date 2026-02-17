@@ -159,6 +159,7 @@ export default async function PostPage({
           caption: t("post.caption"),
           editCaption: t("post.editCaption"),
           generateImages: t("post.generateImages"),
+          imageGenerationBetaHint: t("post.imageGenerationBetaHint"),
           imageGenerationTimeHint: t("post.imageGenerationTimeHint"),
           candidateImagesHint: t("post.candidateImagesHint"),
           placeholder: t("post.placeholder"),
