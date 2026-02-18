@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import JSZip from "jszip";
+import { BindCardButton } from "@/components/BindCardButton";
 
 type CandidateImage = { id: string; url: string };
 
@@ -46,6 +47,8 @@ type PostDetailClientProps = {
     selectAll: string;
     markAsUsed: string;
     firstUseMessage: string;
+    bindCardHintSecondPost: string;
+    bindCardToStartTrial: string;
   };
 };
 
@@ -76,6 +79,7 @@ export function PostDetailClient({
   const [finalizingSlots, setFinalizingSlots] = useState<(null | { url: string })[] | null>(null);
   const [finalizingOrder, setFinalizingOrder] = useState<string[]>([]);
   const [markingUsed, setMarkingUsed] = useState(false);
+  const [bindCardRequired, setBindCardRequired] = useState(false);
   const candidatesAbortRef = useRef<AbortController | null>(null);
   const hasAutoTriggeredCaption = useRef(false);
 
@@ -117,12 +121,17 @@ export function PostDetailClient({
   async function handleGenerate() {
     setGenerating(true);
     setError(null);
+    setBindCardRequired(false);
     try {
       const res = await fetch(`/api/business/${businessId}/posts/${postId}/generate`, {
         method: "POST",
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        if (data.error === "bind_card_required") {
+          setBindCardRequired(true);
+          return;
+        }
         setError(data.error === "quota_exceeded" ? labels.quotaExceeded : (data.message ?? data.error ?? "Request failed"));
         return;
       }
@@ -149,6 +158,10 @@ export function PostDetailClient({
       );
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
+        if (data.error === "bind_card_required") {
+          setBindCardRequired(true);
+          return;
+        }
         let msg = data.message ?? data.error ?? "Request failed";
         if (data.error === "budget_exceeded") msg = labels.budgetExceeded;
         else if (data.error === "image_service_unconfigured") msg = labels.imageServiceUnconfigured;
@@ -379,15 +392,24 @@ export function PostDetailClient({
     <div className="mt-6 space-y-4">
       {isPlanned && (
         <div className="rounded-xl border border-card-border bg-card-bg p-4 shadow-card">
-          <button
-            type="button"
-            onClick={handleGenerate}
-            disabled={generating}
-            className={btnPrimary}
-          >
-            {generating ? labels.generating : labels.generateCaption}
-          </button>
-          {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
+          {bindCardRequired ? (
+            <div className="space-y-3">
+              <p className="text-sm text-neutral-700 dark:text-neutral-300">{labels.bindCardHintSecondPost}</p>
+              <BindCardButton label={labels.bindCardToStartTrial} loadingLabel="…" />
+            </div>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={handleGenerate}
+                disabled={generating}
+                className={btnPrimary}
+              >
+                {generating ? labels.generating : labels.generateCaption}
+              </button>
+              {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
+            </>
+          )}
         </div>
       )}
 
@@ -436,16 +458,23 @@ export function PostDetailClient({
           <p className="mb-3 text-xs text-neutral-500">{labels.imageGenerationBetaHint}</p>
           {!hasCandidates && !hasFinals && !streamingSlots && (
             <>
-              <button
-                type="button"
-                onClick={handleGenerateImages}
-                disabled={generatingImages}
-                className={btnPrimary}
-              >
-                {generatingImages ? labels.generating : labels.generateImages}
-              </button>
-              {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-              {generatingImages && (
+              {bindCardRequired ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-neutral-700 dark:text-neutral-300">{labels.bindCardHintSecondPost}</p>
+                  <BindCardButton label={labels.bindCardToStartTrial} loadingLabel="…" />
+                </div>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleGenerateImages}
+                    disabled={generatingImages}
+                    className={btnPrimary}
+                  >
+                    {generatingImages ? labels.generating : labels.generateImages}
+                  </button>
+                  {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+                  {generatingImages && (
                 <div className="mt-2 space-y-1 text-sm text-neutral-500">
                   <p>
                     {labels.imageGenerationTimeHint.replace(
@@ -455,6 +484,8 @@ export function PostDetailClient({
                   </p>
                   <p>{labels.candidateImagesHint}</p>
                 </div>
+                  )}
+                </>
               )}
             </>
           )}

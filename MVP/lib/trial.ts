@@ -9,11 +9,31 @@ const TRIAL_DAYS = 28;
 
 export type TrialStatus = {
   allowed: boolean;
-  reason?: "trial_expired" | "no_trial";
+  reason?: "trial_expired" | "no_trial" | "bind_card_required";
   trialEndsAt: string | null;
   subscriptionActive: boolean;
   daysLeft: number | null;
 };
+
+/** 用户已生成过的帖子数（caption 已生成，status 非 planned） */
+export async function getGeneratedPostCount(userId: string): Promise<number> {
+  try {
+    const { data: bizIds } = await supabaseAdmin
+      .from("businesses")
+      .select("id")
+      .eq("user_id", userId);
+    if (!bizIds?.length) return 0;
+    const ids = bizIds.map((b) => b.id);
+    const { count } = await supabaseAdmin
+      .from("posts")
+      .select("id", { count: "exact", head: true })
+      .in("business_id", ids)
+      .in("status", ["draft", "images_pending", "ready", "used"]);
+    return count ?? 0;
+  } catch {
+    return 0;
+  }
+}
 
 /**
  * 若 trial_ends_at 为 NULL，设为当前 + 28 天（仅写一次）。
@@ -124,13 +144,16 @@ export async function getTrialStatus(userId: string): Promise<TrialStatus> {
 
 /**
  * 是否允许该用户进行「生成文案 / 候选图 / 最终化」。
- * 试用期内或有效订阅期内为 true；试用结束且无订阅为 false。
+ * 第一条免费；第二条起需绑卡开试用（28 天，16 条）。试用期内或有效订阅为 true。
  */
 export async function canUserGenerate(userId: string): Promise<{ allowed: boolean; reason?: string }> {
+  const generatedCount = await getGeneratedPostCount(userId);
+  if (generatedCount === 0) return { allowed: true }; // 第一条免费
+
   const status = await getTrialStatus(userId);
   if (status.allowed) return { allowed: true };
   return {
     allowed: false,
-    reason: status.reason === "trial_expired" ? "trial_expired" : "upgrade_required",
+    reason: status.reason === "trial_expired" ? "trial_expired" : "bind_card_required",
   };
 }

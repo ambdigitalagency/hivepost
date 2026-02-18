@@ -76,6 +76,12 @@ export async function POST(
   const trial = await canUserGenerate(userId);
   if (!trial.allowed) {
     await recordEvent({ ownerType: "user", ownerId: userId }, "trial_blocked", { reason: trial.reason });
+    if (trial.reason === "bind_card_required") {
+      return NextResponse.json(
+        { error: "bind_card_required", message: "Add payment to start 28-day free trial. 16 free posts included." },
+        { status: 403 }
+      );
+    }
     return NextResponse.json(
       { error: trial.reason ?? "trial_expired", message: "Trial ended. Upgrade to continue." },
       { status: 403 }

@@ -183,6 +183,8 @@ export default async function PostPage({
           selectAll: t("post.selectAll"),
           markAsUsed: t("post.markAsUsed"),
           firstUseMessage: t("post.firstUseMessage"),
+          bindCardHintSecondPost: t("dashboard.bindCardHintSecondPost"),
+          bindCardToStartTrial: t("dashboard.bindCardToStartTrial"),
         }}
       />
       </div>
