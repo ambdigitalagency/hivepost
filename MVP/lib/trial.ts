@@ -15,7 +15,7 @@ export type TrialStatus = {
   daysLeft: number | null;
 };
 
-/** 用户已生成过的帖子数（caption 已生成，status 非 planned） */
+/** 用户已完整完成的帖子数（status=ready/used），用于「第一条免费」判断。仅统计完成后才计入，保证首条可完整走完 caption+images+finalize。 */
 export async function getGeneratedPostCount(userId: string): Promise<number> {
   try {
     const { data: bizIds } = await supabaseAdmin
@@ -28,7 +28,7 @@ export async function getGeneratedPostCount(userId: string): Promise<number> {
       .from("posts")
       .select("id", { count: "exact", head: true })
       .in("business_id", ids)
-      .in("status", ["draft", "images_pending", "ready", "used"]);
+      .in("status", ["ready", "used"]);
     return count ?? 0;
   } catch {
     return 0;

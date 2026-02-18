@@ -315,6 +315,10 @@ export function PostDetailClient({
       );
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
+        if (data.error === "bind_card_required") {
+          setBindCardRequired(true);
+          return;
+        }
         setError(
           data.error === "finalize_limit"
             ? labels.finalizeLimitExceeded
@@ -390,14 +394,17 @@ export function PostDetailClient({
 
   return (
     <div className="mt-6 space-y-4">
+      {bindCardRequired && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
+          <p className="text-sm font-medium text-amber-800 dark:text-amber-200">{labels.bindCardHintSecondPost}</p>
+          <div className="mt-3">
+            <BindCardButton label={labels.bindCardToStartTrial} loadingLabel="…" />
+          </div>
+        </div>
+      )}
       {isPlanned && (
         <div className="rounded-xl border border-card-border bg-card-bg p-4 shadow-card">
-          {bindCardRequired ? (
-            <div className="space-y-3">
-              <p className="text-sm text-neutral-700 dark:text-neutral-300">{labels.bindCardHintSecondPost}</p>
-              <BindCardButton label={labels.bindCardToStartTrial} loadingLabel="…" />
-            </div>
-          ) : (
+          {!bindCardRequired && (
             <>
               <button
                 type="button"
@@ -456,16 +463,9 @@ export function PostDetailClient({
         <div className="rounded-xl border border-card-border bg-card-bg p-4 shadow-card">
           <h2 className="mb-2 text-sm font-medium text-foreground">{labels.generateImages}</h2>
           <p className="mb-3 text-xs text-neutral-500">{labels.imageGenerationBetaHint}</p>
-          {!hasCandidates && !hasFinals && !streamingSlots && (
+          {!hasCandidates && !hasFinals && !streamingSlots && !bindCardRequired && (
             <>
-              {bindCardRequired ? (
-                <div className="space-y-3">
-                  <p className="text-sm text-neutral-700 dark:text-neutral-300">{labels.bindCardHintSecondPost}</p>
-                  <BindCardButton label={labels.bindCardToStartTrial} loadingLabel="…" />
-                </div>
-              ) : (
-                <>
-                  <button
+              <button
                     type="button"
                     onClick={handleGenerateImages}
                     disabled={generatingImages}
@@ -475,19 +475,17 @@ export function PostDetailClient({
                   </button>
                   {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
                   {generatingImages && (
-                <div className="mt-2 space-y-1 text-sm text-neutral-500">
-                  <p>
-                    {labels.imageGenerationTimeHint.replace(
-                      "{{n}}",
-                      String(streamingEstimatedMinutes ?? "5–15")
-                    )}
-                  </p>
-                  <p>{labels.candidateImagesHint}</p>
-                </div>
+                    <div className="mt-2 space-y-1 text-sm text-neutral-500">
+                      <p>
+                        {labels.imageGenerationTimeHint.replace(
+                          "{{n}}",
+                          String(streamingEstimatedMinutes ?? "5–15")
+                        )}
+                      </p>
+                      <p>{labels.candidateImagesHint}</p>
+                    </div>
                   )}
                 </>
-              )}
-            </>
           )}
           {(hasCandidates || streamingSlots) && (
             <>
